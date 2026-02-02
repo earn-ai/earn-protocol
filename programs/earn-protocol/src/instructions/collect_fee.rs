@@ -130,6 +130,18 @@ pub fn collect_fee(
     let master = &mut ctx.accounts.earn_master_treasury;
     master.total_fees_processed = master.total_fees_processed.checked_add(total_fee).unwrap();
     
+    // Emit event
+    emit!(crate::events::FeeCollected {
+        token_mint: ctx.accounts.token_mint.key(),
+        trade_amount,
+        total_fee,
+        earn_amount,
+        creator_amount,
+        buyback_amount,
+        staking_amount,
+        timestamp: Clock::get()?.unix_timestamp,
+    });
+    
     msg!("Fee collected: {} (Earn: {}, Creator: {}, Buyback: {}, Staking: {})",
         total_fee, earn_amount, creator_amount, buyback_amount, staking_amount);
     

@@ -88,6 +88,9 @@ pub struct StakeAccount {
     /// Last time rewards were claimed
     pub last_claim_at: i64,
     
+    /// Reentrancy lock - prevents double-claim attacks
+    pub is_locked: bool,
+    
     /// PDA bump
     pub bump: u8,
 }
@@ -100,6 +103,7 @@ impl StakeAccount {
                             8 +   // pending_rewards
                             8 +   // staked_at
                             8 +   // last_claim_at
+                            1 +   // is_locked
                             1;    // bump
     
     /// Calculate pending rewards for this account

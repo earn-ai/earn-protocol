@@ -53,6 +53,16 @@ pub fn stake(
         amount,
     )?;
     
+    // Emit event
+    emit!(crate::events::Staked {
+        user: ctx.accounts.staker.key(),
+        token_mint: ctx.accounts.token_mint.key(),
+        amount,
+        new_total_staked: stake_account.staked_amount,
+        pool_total_staked: staking_pool.total_staked,
+        timestamp: clock.unix_timestamp,
+    });
+    
     msg!("Staked {} tokens. Total staked: {}", amount, staking_pool.total_staked);
     
     Ok(())

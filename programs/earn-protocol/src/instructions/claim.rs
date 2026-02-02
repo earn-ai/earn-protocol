@@ -10,6 +10,10 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
     let stake_account = &mut ctx.accounts.stake_account;
     let clock = Clock::get()?;
     
+    // Reentrancy protection
+    require!(!stake_account.is_locked, EarnError::Unauthorized); // Using Unauthorized for reentrancy
+    stake_account.is_locked = true;
+    
     // Calculate pending rewards
     let pending_rewards = stake_account.calculate_pending_rewards(staking_pool.reward_per_token_stored);
     
@@ -41,6 +45,18 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         ),
         pending_rewards,
     )?;
+    
+    // Release reentrancy lock
+    let stake_account = &mut ctx.accounts.stake_account;
+    stake_account.is_locked = false;
+    
+    // Emit event
+    emit!(crate::events::RewardsClaimed {
+        user: ctx.accounts.staker.key(),
+        token_mint: ctx.accounts.token_mint.key(),
+        amount: pending_rewards,
+        timestamp: clock.unix_timestamp,
+    });
     
     msg!("Claimed {} rewards", pending_rewards);
     

@@ -79,12 +79,34 @@ impl TokenConfig {
     /// Default staking allocation: 35%
     pub const DEFAULT_STAKING_CUT_BPS: u16 = 3500;
     
-    /// Maximum fee: 10%
-    pub const MAX_FEE_BPS: u16 = 1000;
+    /// Maximum fee: 5% (protects trading volume)
+    pub const MAX_FEE_BPS: u16 = 500;
+    
+    /// Minimum fee: 0.1%
+    pub const MIN_FEE_BPS: u16 = 10;
+    
+    /// Minimum Earn cut: 10% (non-negotiable - this is how Earn earns)
+    pub const MIN_EARN_CUT_BPS: u16 = 1000;
+    
+    /// Maximum creator cut: 30% (prevents extraction)
+    pub const MAX_CREATOR_CUT_BPS: u16 = 3000;
+    
+    /// Minimum staking cut: 25% (holders must benefit)
+    pub const MIN_STAKING_CUT_BPS: u16 = 2500;
     
     /// Validate that cuts sum to 100%
     pub fn validate_cuts(&self) -> bool {
         self.earn_cut_bps + self.creator_cut_bps + self.buyback_cut_bps + self.staking_cut_bps == 10000
+    }
+    
+    /// Validate all guardrails
+    pub fn validate_guardrails(&self) -> bool {
+        self.fee_basis_points >= Self::MIN_FEE_BPS &&
+        self.fee_basis_points <= Self::MAX_FEE_BPS &&
+        self.earn_cut_bps >= Self::MIN_EARN_CUT_BPS &&
+        self.creator_cut_bps <= Self::MAX_CREATOR_CUT_BPS &&
+        self.staking_cut_bps >= Self::MIN_STAKING_CUT_BPS &&
+        self.validate_cuts()
     }
 }
 

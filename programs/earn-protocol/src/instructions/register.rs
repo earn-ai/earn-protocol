@@ -32,6 +32,24 @@ pub fn register(
         EarnError::InvalidFeeSplits
     );
     
+    // Validate guardrails
+    require!(
+        fee_basis_points >= TokenConfig::MIN_FEE_BPS,
+        EarnError::FeeTooHigh // reusing error for "fee too low"
+    );
+    require!(
+        earn_cut >= TokenConfig::MIN_EARN_CUT_BPS,
+        EarnError::InvalidFeeSplits
+    );
+    require!(
+        creator_cut <= TokenConfig::MAX_CREATOR_CUT_BPS,
+        EarnError::InvalidFeeSplits
+    );
+    require!(
+        staking_cut >= TokenConfig::MIN_STAKING_CUT_BPS,
+        EarnError::InvalidFeeSplits
+    );
+    
     let clock = Clock::get()?;
     
     // Initialize TokenConfig
@@ -76,6 +94,20 @@ pub fn register(
     // Update master treasury stats
     let master = &mut ctx.accounts.earn_master_treasury;
     master.total_tokens_registered = master.total_tokens_registered.checked_add(1).unwrap();
+    
+    // Emit event for tracking
+    emit!(crate::events::TokenRegistered {
+        token_mint: ctx.accounts.token_mint.key(),
+        creator: ctx.accounts.creator.key(),
+        fee_basis_points,
+        earn_cut_bps: earn_cut,
+        creator_cut_bps: creator_cut,
+        buyback_cut_bps: buyback_cut,
+        staking_cut_bps: staking_cut,
+        treasury_pda: ctx.accounts.treasury.key(),
+        staking_pool_pda: ctx.accounts.staking_pool.key(),
+        timestamp: clock.unix_timestamp,
+    });
     
     msg!("Token registered: {}", ctx.accounts.token_mint.key());
     msg!("Fee: {}bps, Creator: {}bps, Buyback: {}bps, Staking: {}bps",

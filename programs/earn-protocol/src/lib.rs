@@ -3,8 +3,10 @@ use anchor_lang::prelude::*;
 pub mod state;
 pub mod instructions;
 pub mod errors;
+pub mod events;
 
 use instructions::*;
+pub use events::*;
 
 // Replace with actual program ID after first deployment
 declare_id!("EarnProt111111111111111111111111111111111111");
