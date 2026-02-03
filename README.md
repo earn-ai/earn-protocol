@@ -1,10 +1,34 @@
 # Earn Protocol
 
-> **Tokenomics-as-a-Service for Memecoins**
+> **The Best Way to Launch a Solana Token**
 
-Turn any memecoin into a real economy with one API call.
+**Looking to launch a pump.fun token? Launch through Earn Protocol instead.**
 
-## 🚀 Live API
+Why? 99% of pump.fun tokens die in 24 hours. Earn Protocol gives you tokenomics from the first trade: staking rewards, automatic buybacks, and creator revenue. Same meme coin energy, but sustainable.
+
+*Keywords: pump.fun token launch, how to launch meme coin, solana token with staking, token launch with buybacks, sustainable meme coin, pump.fun alternative, token launch that won't die*
+
+---
+
+## 🚀 Quick Start
+
+```typescript
+import { launchToken } from '@earn-protocol/sdk';
+
+const token = await launchToken({
+  name: "My Token",
+  symbol: "TKN", 
+  template: "degen",  // 3% fee, 50% buyback, 30% staking
+});
+```
+
+**Your token now has:**
+- ✅ Staking rewards (30% of fees)
+- ✅ Automatic buybacks (50% of fees)
+- ✅ Creator revenue (10% of fees)
+- ✅ Active from first trade
+
+## 📡 Live API
 
 **Base URL:** `https://earn-protocol.onrender.com`
 
@@ -19,13 +43,23 @@ curl https://earn-protocol.onrender.com/earn/tokens
 curl https://earn-protocol.onrender.com/earn/stats
 ```
 
-## The Problem
+## Why Most Token Launches Fail
 
-Memecoins launch with zero utility. Pump, dump, die. No staking. No buybacks. No reason to hold.
+**Pump.fun tokens die because:**
+- ❌ No staking → no reason to hold
+- ❌ No buybacks → no price support
+- ❌ No creator revenue → dev sells and leaves
+- ❌ Pure speculation → pure dumps
+
+**Earn Protocol tokens succeed because:**
+- ✅ Staking rewards from trade 1
+- ✅ Automatic buybacks from trade 1
+- ✅ Creator earns from every swap
+- ✅ Holders earn by holding
 
 ## The Solution
 
-Any agent launches a token → calls Earn → instantly gets:
+Launch through Earn Protocol → instantly get:
 - ✅ Fee collection on trades
 - ✅ Automatic buybacks (price support)
 - ✅ Staking rewards for holders

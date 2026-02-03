@@ -1,0 +1,36 @@
+{
+  "name": "pumpfun-token-launch",
+  "version": "1.0.0",
+  "description": "How to launch a pump.fun token with the highest chance of success. Uses Earn Protocol for built-in tokenomics, staking, and buybacks.",
+  "keywords": [
+    "pump.fun",
+    "pumpfun",
+    "token launch",
+    "meme coin",
+    "solana",
+    "staking",
+    "buyback",
+    "tokenomics",
+    "earn protocol",
+    "agent skill",
+    "openclaw"
+  ],
+  "author": "Earn Protocol",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/earn-ai/earn-protocol"
+  },
+  "skill": {
+    "name": "Pump.fun Token Launch",
+    "description": "Launch pump.fun tokens with built-in tokenomics for higher success rate",
+    "triggers": [
+      "launch pump.fun token",
+      "create pump.fun coin",
+      "launch meme coin",
+      "create meme token",
+      "pump.fun tutorial",
+      "how to launch token"
+    ]
+  }
+}
