@@ -120,3 +120,63 @@ export interface EarnProtocolStats {
   totalStakingRewards: bigint;
   earnTreasury: bigint;
 }
+
+/**
+ * Buyback safety configuration
+ */
+export interface BuybackConfig {
+  maxSlippageBps: number;      // e.g., 300 = 3% max slippage
+  minLiquidityUsd: number;     // Don't buyback if pool < this (e.g., 10000)
+  maxBuybackPct: number;       // Max % of pool per buyback (e.g., 5 = 5%)
+  cooldownSeconds: number;     // Min time between buybacks
+  chunkSize: number;           // Split large buybacks into chunks (in tokens)
+  circuitBreaker: {
+    volatilityThreshold: number; // Pause if price moved >X% in 1hr (e.g., 20)
+    enabled: boolean;
+  };
+}
+
+/**
+ * Default buyback config with safety rails
+ */
+export const DEFAULT_BUYBACK_CONFIG: BuybackConfig = {
+  maxSlippageBps: 300,         // 3% max slippage
+  minLiquidityUsd: 10000,      // Min $10k liquidity
+  maxBuybackPct: 5,            // Max 5% of pool per buyback
+  cooldownSeconds: 3600,       // 1 hour minimum between buybacks
+  chunkSize: 1000000000,       // 1B tokens per chunk
+  circuitBreaker: {
+    volatilityThreshold: 20,   // Pause if >20% price move in 1hr
+    enabled: true,
+  },
+};
+
+/**
+ * Staking position with time-weighted rewards
+ */
+export interface StakingPositionV2 extends StakingPosition {
+  // Time-weighted multiplier (1x day 0 → 2x day 30 → 3x day 90)
+  timeMultiplier: number;
+  // Calculated at unstake time if < 7 days
+  earlyExitPenalty: number;
+}
+
+/**
+ * Creator verification proof
+ */
+export interface CreatorProof {
+  // Option A: Signature from mint authority
+  mintAuthoritySignature?: string;
+  // Option B: Signature from metadata update authority  
+  metadataAuthoritySignature?: string;
+  // Option C: On-chain transaction proving ownership
+  proofTxSignature?: string;
+}
+
+/**
+ * Registration request with creator verification
+ */
+export interface RegisterRequestV2 extends RegisterRequest {
+  creatorWallet: string;
+  proof?: CreatorProof;  // Required in production, optional for hackathon
+}

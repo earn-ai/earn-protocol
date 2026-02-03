@@ -128,6 +128,149 @@ curl -X POST http://localhost:3000/earn/stake \
 - In-memory state (would use on-chain in production)
 - Webhook support for DEX integrations
 
+---
+
+## Trust Model
+
+### How Are Fees Enforced?
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   FEE ENFORCEMENT MODEL                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  HACKATHON (Now):                                           │
+│  • Earn wraps Jupiter swaps                                 │
+│  • Agents call Earn API → Earn calls Jupiter → fee taken   │
+│  • Trust model: agents WANT fees (it funds their staking)   │
+│                                                             │
+│  PRODUCTION (Future):                                       │
+│  • Token-2022 transfer hooks (unstoppable)                  │
+│  • Every transfer triggers fee, no bypass possible          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Why agents cooperate:**
+1. Fees fund staking rewards → their holders get paid
+2. Fees fund buybacks → price support for their token
+3. Bypassing = missing out on the value Earn provides
+
+---
+
+## Buyback Safety Rails
+
+Buybacks can get rekt by bad params, MEV, and slippage. Earn includes these guardrails:
+
+```typescript
+interface BuybackConfig {
+  maxSlippageBps: number;      // 300 = 3% max slippage
+  minLiquidityUsd: number;     // Don't buyback if pool < $10k
+  maxBuybackPct: number;       // Max 5% of pool per buyback
+  cooldownSeconds: number;     // Min 1 hour between buybacks
+  chunkSize: number;           // Split large buybacks into chunks
+  circuitBreaker: {
+    volatilityThreshold: number; // Pause if price moved >20% in 1hr
+    enabled: boolean;
+  };
+}
+```
+
+**Default safety config:**
+- 3% max slippage
+- $10k minimum pool liquidity
+- 5% max pool impact per buyback
+- 1 hour cooldown between buybacks
+- Circuit breaker pauses on >20% volatility
+
+---
+
+## Anti-Farm Staking
+
+Mercenary capital can farm and dump. Earn uses time-weighted rewards:
+
+```typescript
+// Rewards scale with stake age
+function calculateRewards(stakeAccount: StakeAccount): number {
+  const stakedDays = (now - stakeAccount.stakedAt) / 86400;
+  
+  // Multiplier: 1x at day 0, 2x at day 30, max 3x at day 90
+  const timeMultiplier = Math.min(1 + (stakedDays / 30), 3);
+  
+  const baseRewards = stakeAccount.amount * rewardRate;
+  return baseRewards * timeMultiplier;
+}
+
+// Early exit penalty (5% if unstake < 7 days)
+function calculateUnstakePenalty(stakeAccount: StakeAccount): number {
+  const stakedDays = (now - stakeAccount.stakedAt) / 86400;
+  if (stakedDays < 7) {
+    return 0.05; // 5% penalty, redistributed to loyal stakers
+  }
+  return 0;
+}
+```
+
+**Anti-farm features:**
+- Time-weighted multiplier (1x → 3x over 90 days)
+- 5% early exit penalty if unstake < 7 days
+- Penalties redistributed to loyal stakers
+
+---
+
+## Creator Verification
+
+Prevent impersonators from claiming creator share:
+
+```typescript
+// On register, verify caller controls the token
+POST /earn/register
+{
+  "tokenMint": "xxx",
+  "creatorWallet": "yyy",
+  "proof": {
+    // Option A: Signature from mint authority
+    "mintAuthoritySignature": "...",
+    
+    // Option B: Signature from metadata update authority
+    "metadataAuthoritySignature": "...",
+    
+    // Option C: On-chain transaction proving ownership
+    "proofTxSignature": "..."
+  }
+}
+```
+
+**Security guarantees:**
+- Creator address is **IMMUTABLE** after registration
+- Proof required from mint authority OR metadata authority
+- No way to hijack creator earnings post-registration
+
+---
+
+## State Roadmap
+
+| Component | Hackathon | Production |
+|-----------|-----------|------------|
+| Token Registry | In-memory | On-chain (Anchor) |
+| Fee Collection | API-enforced | Token-2022 hooks |
+| Staking Positions | In-memory | On-chain PDAs |
+| Buyback Execution | Jupiter API | Jupiter CPI |
+| Creator Verification | Optional | Required (signature) |
+| Reward Calculation | Time-weighted | Time-weighted + vesting |
+
+**Hackathon MVP focuses on:**
+- Proving the concept works
+- Clean API for agent integration
+- Safety rails documented
+
+**Production adds:**
+- Fully on-chain state
+- Unstoppable fee collection
+- Permissionless operation
+
+---
+
 ## The Flywheel
 
 ```
