@@ -94,6 +94,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root - API info
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Earn Protocol',
+    description: 'Tokenomics-as-a-service for memecoins',
+    docs: 'https://github.com/earn-ai/earn-protocol',
+    endpoints: {
+      health: '/health',
+      stats: '/earn/stats',
+      tokens: '/earn/tokens',
+      register: 'POST /earn/register',
+      trade: 'POST /earn/trade',
+      stake: 'POST /earn/stake'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', protocol: 'Earn Protocol v0.1.0' });
