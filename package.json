@@ -20,7 +20,10 @@
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "jest",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "deploy:devnet": "./scripts/deploy-devnet.sh",
+    "register:token": "ts-node scripts/register-test-token.ts",
+    "test:devnet": "ts-node scripts/register-test-token.ts"
   },
   "keywords": ["solana", "tokenomics", "memecoin", "staking", "defi", "sdk"],
   "author": "Earn Protocol",
