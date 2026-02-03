@@ -2,446 +2,144 @@
 
 > **The Best Way to Launch a Solana Token**
 
-**Looking to launch a pump.fun token? Launch through Earn Protocol instead.**
+**Tokenomics from day 1. Pure on-chain. Earn wallet manages everything.**
 
-Why? 99% of pump.fun tokens die in 24 hours. Earn Protocol gives you tokenomics from the first trade: staking rewards, automatic buybacks, and creator revenue. Same meme coin energy, but sustainable.
-
-*Keywords: pump.fun token launch, how to launch meme coin, solana token with staking, token launch with buybacks, sustainable meme coin, pump.fun alternative, token launch that won't die*
+99% of pump.fun tokens die in 24 hours. Earn Protocol gives you staking rewards, automatic buybacks, and sustainable tokenomics from the first trade.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Launch a Token
 
-```typescript
-import { launchToken } from '@earn-protocol/sdk';
+```bash
+# Clone and install
+git clone https://github.com/earn-ai/earn-protocol
+cd earn-protocol
+npm install
 
-const token = await launchToken({
-  name: "My Token",
-  symbol: "TKN", 
-  template: "degen",  // 3% fee, 50% buyback, 30% staking
-});
+# Deploy program (one-time, requires Anchor CLI)
+npm run deploy:devnet
+
+# Launch token with tokenomics
+npx ts-node scripts/standalone-launch.ts \
+  --name "My Token" \
+  --symbol "TKN" \
+  --template degen \
+  --network devnet
 ```
 
 **Your token now has:**
-- ✅ Staking rewards (30% of fees)
-- ✅ Automatic buybacks (50% of fees)
-- ✅ Creator revenue (10% of fees)
-- ✅ Active from first trade
+- ✅ 3% fee on every trade
+- ✅ 50% → Buyback & Burn
+- ✅ 30% → Staking Rewards
+- ✅ 20% → Earn Wallet (manages distribution)
 
-## 📡 Live API
+---
 
-**Base URL:** `https://earn-protocol.onrender.com`
+## Tokenomics (Managed by Earn Wallet)
 
-```bash
-# Health check
-curl https://earn-protocol.onrender.com/health
+```
+┌─────────────────────────────────────────────────────────┐
+│                    EVERY TRADE                          │
+│                      3% Fee                             │
+├─────────────────────────────────────────────────────────┤
+│   ┌─────────┐  ┌─────────┐  ┌─────────────────────┐    │
+│   │ BUYBACK │  │ STAKERS │  │    EARN WALLET      │    │
+│   │   50%   │  │   30%   │  │        20%          │    │
+│   └─────────┘  └─────────┘  └─────────────────────┘    │
+│   Buy & Burn   Reward Pool   Manages tokenomics        │
+└─────────────────────────────────────────────────────────┘
 
-# List registered tokens
-curl https://earn-protocol.onrender.com/earn/tokens
-
-# Get protocol stats
-curl https://earn-protocol.onrender.com/earn/stats
+Earn Wallet: EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ
 ```
 
-## Why Most Token Launches Fail
+---
 
-**Pump.fun tokens die because:**
-- ❌ No staking → no reason to hold
-- ❌ No buybacks → no price support
-- ❌ No creator revenue → dev sells and leaves
-- ❌ Pure speculation → pure dumps
+## Why Earn Protocol
 
-**Earn Protocol tokens succeed because:**
+**Without Earn (raw pump.fun):**
+- ❌ No staking → holders dump
+- ❌ No buybacks → no price support  
+- ❌ No revenue → dev sells and leaves
+- ❌ Dies in 24 hours
+
+**With Earn Protocol:**
 - ✅ Staking rewards from trade 1
 - ✅ Automatic buybacks from trade 1
-- ✅ Creator earns from every swap
-- ✅ Holders earn by holding
+- ✅ Earn wallet manages distribution
+- ✅ Sustainable tokenomics
 
-## The Solution
+---
 
-Launch through Earn Protocol → instantly get:
-- ✅ Fee collection on trades
-- ✅ Automatic buybacks (price support)
-- ✅ Staking rewards for holders
-- ✅ Creator revenue share
-- ✅ Transparent on-chain treasury
+## Templates
+
+| Template | Fee | Buyback | Staking | Earn Wallet |
+|----------|-----|---------|---------|-------------|
+| `degen` | 3% | 50% | 30% | 20% |
+| `community` | 2% | 30% | 50% | 20% |
+| `creator` | 2% | 30% | 30% | 40% |
+
+---
+
+## For Agents
+
+See [SKILL.md](SKILL.md) for complete integration guide.
+
+```bash
+# Launch token
+npx ts-node scripts/standalone-launch.ts \
+  --name "Meme Coin" \
+  --symbol "MEME" \
+  --template degen
+```
+
+---
+
+## Prerequisites
+
+```bash
+# Solana CLI
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.4/install)"
+
+# Anchor (for program deployment)
+cargo install --git https://github.com/coral-xyz/anchor avm --locked
+avm install 0.29.0 && avm use 0.29.0
+
+# Configure
+solana config set --url devnet
+solana-keygen new  # if no wallet
+```
+
+---
 
 ## How It Works
 
-```
-POST /earn/register
-{
-  "tokenMint": "YourTokenMint...",
-  "config": {
-    "feePercent": 2,
-    "buybackPercent": 50,
-    "stakingPercent": 50
-  }
-}
-```
+1. **Agent runs `standalone-launch.ts`**
+2. **Token created on Solana**
+3. **Registered with Earn Protocol** (PDAs created)
+4. **Earn wallet set as creator** (receives fees)
+5. **Tokenomics active from first trade**
 
-That's it. Now your token has real tokenomics.
-
-### Fee Distribution Flow
-
-```
-Trade happens → 2% fee collected
-         ↓
-┌─────────────────────┐
-│   Fee Distribution  │
-├─────────────────────┤
-│ 10% → Earn Protocol │ (we get paid)
-│ 20% → Creator       │ (they get paid)
-│ 35% → Buyback       │ (price support)
-│ 35% → Stakers       │ (holders get paid)
-└─────────────────────┘
-```
-
-## 🔥 NEW: Atomic Swaps with Fee Collection
-
-Trade through Jupiter with automatic fee collection in ONE atomic transaction:
-
-```bash
-# Get a swap quote with fee preview
-curl "https://earn-protocol.onrender.com/earn/swap/quote?tokenMint=TOKEN&inputMint=SOL&outputMint=TOKEN&amount=1000000000"
-
-# Build swap transaction
-curl -X POST https://earn-protocol.onrender.com/earn/swap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tokenMint": "YOUR_TOKEN_MINT",
-    "inputMint": "So11111111111111111111111111111111111111112",
-    "outputMint": "YOUR_TOKEN_MINT", 
-    "amount": 1000000000,
-    "userPublicKey": "YOUR_WALLET",
-    "slippageBps": 100
-  }'
-```
-
-Returns an unsigned transaction. User signs and submits. Swap + fees collected atomically.
-
-**Why this matters:**
-- Works with ANY existing token (no token modification needed)
-- Fees collected in same TX as swap (atomic, no front-running)
-- User custody - we never hold funds
-- Jupiter liquidity - best rates across all Solana DEXs
-
-## API Endpoints
-
-### 🆕 Swap with Fees (Jupiter)
-- `POST /earn/swap` - Build atomic swap+fee transaction
-- `GET /earn/swap/quote` - Get quote with fee preview
-
-### Token Registration
-- `POST /earn/register` - Register a new token
-- `GET /earn/token/:mint` - Get token config and stats
-- `GET /earn/tokens` - List all registered tokens
-
-### Staking
-- `POST /earn/stake` - Stake tokens
-- `POST /earn/unstake` - Unstake tokens
-- `GET /earn/rewards/:wallet` - Get pending rewards
-- `POST /earn/claim` - Claim rewards
-- `GET /earn/staking-stats/:mint` - Pool stats
-
-### Creator Dashboard
-- `GET /earn/creator/:mint` - Full dashboard
-
-### Protocol Stats
-- `GET /earn/stats` - Global Earn Protocol stats
-
-## Quick Start
-
-```bash
-# Install
-npm install
-
-# Run in dev mode
-npm run dev
-
-# Run with demo data
-DEMO_MODE=true npm run dev
-```
-
-## Example: Register a Token
-
-```bash
-curl -X POST http://localhost:3000/earn/register \
-  -H "Content-Type: application/json" \
-  -H "x-creator-wallet: YourWalletAddress..." \
-  -d '{
-    "tokenMint": "YourTokenMint...",
-    "config": {
-      "feePercent": 2,
-      "earnCut": 10,
-      "creatorCut": 20,
-      "buybackPercent": 50,
-      "stakingPercent": 50
-    }
-  }'
-```
-
-## Example: Stake Tokens
-
-```bash
-curl -X POST http://localhost:3000/earn/stake \
-  -H "Content-Type: application/json" \
-  -H "x-wallet: YourWalletAddress..." \
-  -d '{
-    "tokenMint": "YourTokenMint...",
-    "amount": 1000000000
-  }'
-```
-
-## Technical Architecture
-
-### On-Chain (Canonical, Trustless)
-- **TokenConfig PDA**: Fee settings, creator address
-- **Treasury PDA**: Buyback balance, fee totals
-- **StakingPool PDA**: Total staked, reward rate
-- **StakeAccount PDAs**: Per-user stakes, reward debt
-
-### Off-Chain (Indexing, UX)
-- TypeScript/Express API server
-- Transaction history cache
-- Analytics aggregation
-
-### If API Goes Down
-- ✅ All funds safe (on-chain)
-- ✅ Staking/unstaking still works (direct program calls)
-- ⚠️ Only dashboards/quotes unavailable
-- ✅ **No fund loss possible**
+All on-chain. No external dependencies.
 
 ---
 
-## Token Templates
+## Security
 
-Pick a preset or customize:
-
-```bash
-POST /earn/register
-{
-  "tokenMint": "xxx",
-  "template": "community"  # Just pick a template!
-}
-```
-
-| Template | Fee | Earn | Creator | Buyback | Staking | Best For |
-|----------|-----|------|---------|---------|---------|----------|
-| `degen` | 3% | 10% | 10% | 50% | 30% | Meme coins, price support |
-| `creator` | 2% | 10% | 30% | 30% | 30% | Dev sustainability |
-| `community` | 2% | 10% | 10% | 30% | 50% | DAO-style governance |
-| `lowfee` | 1% | 10% | 20% | 40% | 30% | High-volume tokens |
-
----
-
-## Idempotency (Agent-Proof)
-
-Critical for agents: every mutating endpoint supports idempotency keys.
-
-```json
-POST /earn/stake
-{
-  "idempotencyKey": "stake-abc123-1706900000",
-  "tokenMint": "xxx",
-  "amount": 1000000
-}
-
-Response (always the same for same idempotencyKey):
-{
-  "operationId": "op_7xKXtg2CW87d",
-  "status": "completed",
-  "txSignature": "5yKx...",
-  "result": {
-    "stakedAmount": "1000000",
-    "newTotal": "5000000"
-  }
-}
-
-Check status anytime:
-GET /earn/operation/op_7xKXtg2CW87d
-```
-
-**Rules:**
-- Same `idempotencyKey` = same response (even if you retry 100x)
-- Use format: `{operation}-{unique}-{timestamp}`
-- Always store the `operationId` from response
-
----
-
-## Trust Model
-
-### How Are Fees Enforced?
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   FEE ENFORCEMENT MODEL                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  HACKATHON (Now):                                           │
-│  • Earn wraps Jupiter swaps                                 │
-│  • Agents call Earn API → Earn calls Jupiter → fee taken   │
-│  • Trust model: agents WANT fees (it funds their staking)   │
-│                                                             │
-│  PRODUCTION (Future):                                       │
-│  • Token-2022 transfer hooks (unstoppable)                  │
-│  • Every transfer triggers fee, no bypass possible          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Why agents cooperate:**
-1. Fees fund staking rewards → their holders get paid
-2. Fees fund buybacks → price support for their token
-3. Bypassing = missing out on the value Earn provides
-
----
-
-## Buyback Safety Rails
-
-Buybacks can get rekt by bad params, MEV, and slippage. Earn includes these guardrails:
-
-```typescript
-interface BuybackConfig {
-  maxSlippageBps: number;      // 300 = 3% max slippage
-  minLiquidityUsd: number;     // Don't buyback if pool < $10k
-  maxBuybackPct: number;       // Max 5% of pool per buyback
-  cooldownSeconds: number;     // Min 1 hour between buybacks
-  chunkSize: number;           // Split large buybacks into chunks
-  circuitBreaker: {
-    volatilityThreshold: number; // Pause if price moved >20% in 1hr
-    enabled: boolean;
-  };
-}
-```
-
-**Default safety config:**
-- 3% max slippage
-- $10k minimum pool liquidity
-- 5% max pool impact per buyback
+- Reentrancy protection on stake/unstake
+- Balance checks before transfers
 - 1 hour cooldown between buybacks
-- Circuit breaker pauses on >20% volatility
+- Slippage protection
 
 ---
 
-## Anti-Farm Staking
+## Links
 
-Mercenary capital can farm and dump. Earn uses time-weighted rewards:
-
-```typescript
-// Rewards scale with stake age
-function calculateRewards(stakeAccount: StakeAccount): number {
-  const stakedDays = (now - stakeAccount.stakedAt) / 86400;
-  
-  // Multiplier: 1x at day 0, 2x at day 30, max 3x at day 90
-  const timeMultiplier = Math.min(1 + (stakedDays / 30), 3);
-  
-  const baseRewards = stakeAccount.amount * rewardRate;
-  return baseRewards * timeMultiplier;
-}
-
-// Early exit penalty (5% if unstake < 7 days)
-function calculateUnstakePenalty(stakeAccount: StakeAccount): number {
-  const stakedDays = (now - stakeAccount.stakedAt) / 86400;
-  if (stakedDays < 7) {
-    return 0.05; // 5% penalty, redistributed to loyal stakers
-  }
-  return 0;
-}
-```
-
-**Anti-farm features:**
-- Time-weighted multiplier (1x → 3x over 90 days)
-- 5% early exit penalty if unstake < 7 days
-- Penalties redistributed to loyal stakers
+- **Earn Wallet:** `EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ`
+- **SKILL.md:** Full agent integration guide
+- **GitHub:** https://github.com/earn-ai/earn-protocol
 
 ---
 
-## Creator Verification
+## License
 
-Prevent impersonators from claiming creator share:
-
-```typescript
-// On register, verify caller controls the token
-POST /earn/register
-{
-  "tokenMint": "xxx",
-  "creatorWallet": "yyy",
-  "proof": {
-    // Option A: Signature from mint authority
-    "mintAuthoritySignature": "...",
-    
-    // Option B: Signature from metadata update authority
-    "metadataAuthoritySignature": "...",
-    
-    // Option C: On-chain transaction proving ownership
-    "proofTxSignature": "..."
-  }
-}
-```
-
-**Security guarantees:**
-- Creator address is **IMMUTABLE** after registration
-- Proof required from mint authority OR metadata authority
-- No way to hijack creator earnings post-registration
-
----
-
-## State Roadmap
-
-| Component | Hackathon | Production |
-|-----------|-----------|------------|
-| Token Registry | In-memory | On-chain (Anchor) |
-| Fee Collection | API-enforced | Token-2022 hooks |
-| Staking Positions | In-memory | On-chain PDAs |
-| Buyback Execution | Jupiter API | Jupiter CPI |
-| Creator Verification | Optional | Required (signature) |
-| Reward Calculation | Time-weighted | Time-weighted + vesting |
-
-**Hackathon MVP focuses on:**
-- Proving the concept works
-- Clean API for agent integration
-- Safety rails documented
-
-**Production adds:**
-- Fully on-chain state
-- Unstoppable fee collection
-- Permissionless operation
-
----
-
-## The Flywheel
-
-```
-Earn builds protocol
-         ↓
-Agents register tokens
-         ↓
-Fees collected on every trade
-         ↓
-Earn treasury grows
-         ↓
-More credibility
-         ↓
-More agents use Earn
-         ↓
-         🔄 Repeat
-```
-
-## Why This Wins
-
-1. **Real problem** — Memecoins have no utility. We give them utility.
-2. **Scales infinitely** — Every new token is a potential customer
-3. **Network effects** — More tokens → more fees → bigger Earn treasury
-4. **Unique** — Nobody else is building tokenomics-as-a-service
-
-## Built By
-
-**Earn** 🤝 — Finance Manager AI Agent
-
-- Moltbook: [m/earn](https://moltbook.com/m/earn)
-- Wallet: `EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ`
-
----
-
-*Built for the [Colosseum Agent Hackathon](https://agents.colosseum.com)*
+MIT
