@@ -3,7 +3,7 @@ name: earn-protocol
 version: 1.0.0
 description: Tokenomics-as-a-service for memecoins. Use this skill when an agent needs to add fee collection, buybacks, staking rewards, or creator revenue sharing to any SPL token. Register any token from pump.fun, Raydium, or Meteora to get instant tokenomics.
 homepage: https://github.com/earn-ai/earn-protocol
-metadata: {"category":"defi","api_base":"https://earn-api.up.railway.app","network":"solana-devnet","prize_integration":"colosseum-agent-hackathon"}
+metadata: {"category":"defi","api_base":"https://earn-protocol.onrender.com","network":"solana-devnet","prize_integration":"colosseum-agent-hackathon"}
 ---
 
 # Earn Protocol
@@ -22,7 +22,7 @@ Tokenomics-as-a-service. Turn any memecoin into a real economy with one API call
 ### 1. Register Your Token
 
 ```bash
-curl -X POST https://earn-api.up.railway.app/earn/register \
+curl -X POST https://earn-protocol.onrender.com/earn/register \
   -H "Content-Type: application/json" \
   -d '{
     "tokenMint": "YourTokenMintAddress",
@@ -38,7 +38,7 @@ curl -X POST https://earn-api.up.railway.app/earn/register \
 ### 2. Execute Trades (Fee Collection)
 
 ```bash
-curl -X POST https://earn-api.up.railway.app/earn/trade \
+curl -X POST https://earn-protocol.onrender.com/earn/trade \
   -H "Content-Type: application/json" \
   -d '{
     "tokenMint": "YourTokenMint",
@@ -53,7 +53,7 @@ curl -X POST https://earn-api.up.railway.app/earn/trade \
 ### 3. Stake Tokens
 
 ```bash
-curl -X POST https://earn-api.up.railway.app/earn/stake \
+curl -X POST https://earn-protocol.onrender.com/earn/stake \
   -H "Content-Type: application/json" \
   -H "x-wallet: WalletAddress" \
   -d '{
@@ -65,13 +65,13 @@ curl -X POST https://earn-api.up.railway.app/earn/stake \
 ### 4. Check Rewards
 
 ```bash
-curl https://earn-api.up.railway.app/earn/rewards/TOKEN_MINT/WALLET
+curl https://earn-protocol.onrender.com/earn/rewards/TOKEN_MINT/WALLET
 ```
 
 ### 5. Claim Rewards
 
 ```bash
-curl -X POST https://earn-api.up.railway.app/earn/claim \
+curl -X POST https://earn-protocol.onrender.com/earn/claim \
   -H "Content-Type: application/json" \
   -H "x-wallet: WalletAddress" \
   -d '{
@@ -123,7 +123,7 @@ Default split (2% fee):
 All mutating endpoints support idempotency keys for safe retries:
 
 ```bash
-curl -X POST https://earn-api.up.railway.app/earn/stake \
+curl -X POST https://earn-protocol.onrender.com/earn/stake \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: stake-unique-123" \
   -d '{"tokenMint": "...", "amount": 1000000}'
@@ -148,7 +148,7 @@ Same key = same response. Safe to retry.
 ```javascript
 // Your swap handler
 async function handleSwap(params) {
-  const result = await fetch('https://earn-api.up.railway.app/earn/trade', {
+  const result = await fetch('https://earn-protocol.onrender.com/earn/trade', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -168,7 +168,7 @@ async function handleSwap(params) {
 
 ```javascript
 // After token creation
-await fetch('https://earn-api.up.railway.app/earn/register', {
+await fetch('https://earn-protocol.onrender.com/earn/register', {
   method: 'POST',
   headers: { 
     'Content-Type': 'application/json',
@@ -187,7 +187,7 @@ await fetch('https://earn-api.up.railway.app/earn/register', {
 ```javascript
 // Get staking APY for display
 const stats = await fetch(
-  `https://earn-api.up.railway.app/earn/token/${tokenMint}/stats`
+  `https://earn-protocol.onrender.com/earn/token/${tokenMint}/stats`
 ).then(r => r.json());
 
 console.log(`Staking APY: ${stats.staking.currentApy}%`);
@@ -199,7 +199,7 @@ console.log(`Staking APY: ${stats.staking.currentApy}%`);
 import { EarnSDK } from '@earn-protocol/sdk';
 
 const earn = new EarnSDK({
-  baseUrl: 'https://earn-api.up.railway.app',
+  baseUrl: 'https://earn-protocol.onrender.com',
   network: 'devnet'
 });
 

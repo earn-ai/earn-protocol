@@ -4,6 +4,21 @@
 
 Turn any memecoin into a real economy with one API call.
 
+## 🚀 Live API
+
+**Base URL:** `https://earn-protocol.onrender.com`
+
+```bash
+# Health check
+curl https://earn-protocol.onrender.com/health
+
+# List registered tokens
+curl https://earn-protocol.onrender.com/earn/tokens
+
+# Get protocol stats
+curl https://earn-protocol.onrender.com/earn/stats
+```
+
 ## The Problem
 
 Memecoins launch with zero utility. Pump, dump, die. No staking. No buybacks. No reason to hold.

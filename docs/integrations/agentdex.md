@@ -90,7 +90,7 @@ Idempotency-Key: trade-{unique}-{timestamp}  (optional, recommended)
 import { EarnSDK } from '@earn-protocol/sdk';
 
 const earn = new EarnSDK({
-  baseUrl: 'https://earn-api.example.com',
+  baseUrl: 'https://earn-protocol.onrender.com',
   network: 'devnet'
 });
 
@@ -126,7 +126,7 @@ async function handleSwap(params: {
 
 ```bash
 # Execute trade through Earn
-curl -X POST https://earn-api.example.com/earn/trade \
+curl -X POST https://earn-protocol.onrender.com/earn/trade \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: trade-agentdex-$(date +%s)" \
   -d '{
@@ -144,7 +144,7 @@ curl -X POST https://earn-api.example.com/earn/trade \
 Before routing through Earn, you can check if a token has tokenomics enabled:
 
 ```bash
-curl https://earn-api.example.com/earn/token/TokenMintAddress...
+curl https://earn-protocol.onrender.com/earn/token/TokenMintAddress...
 ```
 
 **Response (Registered):**
