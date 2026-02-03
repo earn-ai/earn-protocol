@@ -15,7 +15,51 @@
 
 ---
 
-## Quick Start (30 seconds)
+## Quick Start (10 seconds) ⚡
+
+**ONE-CLICK ONBOARDING** - Just say "make my token legit":
+
+```bash
+curl -X POST https://earn-protocol.onrender.com/earn/onboard \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokenMint": "YOUR_TOKEN_MINT",
+    "creatorWallet": "YOUR_WALLET",
+    "intent": "auto"
+  }'
+```
+
+**Response:**
+```json
+{
+  "status": "live",
+  "stakingPool": "POOL_ADDRESS...",
+  "dashboardUrl": "https://earn.supply/token/YOUR_TOKEN",
+  "nextSteps": {
+    "staking": "Users can stake at earn.supply/stake/YOUR_TOKEN",
+    "fees": "Automatic 2% on all swaps via Jupiter",
+    "rewards": "Staking rewards funded from fee pool",
+    "share": "https://twitter.com/intent/tweet?text=..."
+  }
+}
+```
+
+**Done.** Your token now has fees, staking, and buybacks. Share the dashboard link with your community.
+
+### Intent Options
+
+| Intent | What it does | Best for |
+|--------|--------------|----------|
+| `auto` | Analyzes your token, picks best template | Not sure what to pick |
+| `community` | 50% staking rewards | DAOs, governance tokens |
+| `creator` | 30% to you | Projects needing dev funding |
+| `degen` | 50% buybacks | Meme coins, price support |
+
+---
+
+## Alternative: Manual Registration
+
+For more control, use the register endpoint directly:
 
 ```bash
 # Register your token with Earn Protocol
@@ -28,7 +72,7 @@ curl -X POST https://earn-protocol.onrender.com/earn/register \
   }'
 ```
 
-That's it. Your token now has:
+This gives you:
 - 2% fee on trades
 - 35% to staking rewards
 - 35% to buybacks
@@ -90,7 +134,52 @@ That's it. Your token now has:
 
 ---
 
-## Complete Integration Example
+## Python Agent Example
+
+For AI agents using Python:
+
+```python
+import requests
+
+class EarnProtocol:
+    BASE_URL = "https://earn-protocol.onrender.com"
+    
+    def __init__(self, creator_wallet: str):
+        self.creator_wallet = creator_wallet
+    
+    def onboard(self, token_mint: str, intent: str = "auto"):
+        """One-click onboarding - make any token legit"""
+        response = requests.post(
+            f"{self.BASE_URL}/earn/onboard",
+            json={
+                "tokenMint": token_mint,
+                "creatorWallet": self.creator_wallet,
+                "intent": intent,  # auto, community, creator, or degen
+            }
+        )
+        return response.json()
+    
+    def get_stats(self, token_mint: str):
+        """Get token stats"""
+        return requests.get(f"{self.BASE_URL}/earn/token/{token_mint}/stats").json()
+
+# Usage
+earn = EarnProtocol(creator_wallet="YOUR_WALLET")
+
+# One line to add structure to any token
+result = earn.onboard(
+    token_mint="YOUR_TOKEN_MINT",
+    intent="auto"  # Let Earn pick the best template
+)
+
+print(f"🚀 Token is live!")
+print(f"Dashboard: {result['dashboardUrl']}")
+print(f"Staking: {result['nextSteps']['staking']}")
+```
+
+---
+
+## TypeScript/JavaScript Integration
 
 ### Step 1: Register Token
 
