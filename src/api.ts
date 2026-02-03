@@ -459,11 +459,10 @@ app.post('/earn/register', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing tokenMint' });
     }
 
-    // Get creator from auth header (simplified - would verify signature in production)
-    const creatorAddress = req.headers['x-creator-wallet'] as string;
-    if (!creatorAddress) {
-      return res.status(401).json({ error: 'Missing x-creator-wallet header' });
-    }
+    // Get creator from auth header, default to Earn Protocol wallet
+    // This means if no creator specified, Earn receives creator fees too
+    const EARN_DEFAULT_CREATOR = 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
+    const creatorAddress = (req.headers['x-creator-wallet'] as string) || EARN_DEFAULT_CREATOR;
 
     // Check idempotency (header or body)
     const { operation, isNew } = getOrCreateOperation(
