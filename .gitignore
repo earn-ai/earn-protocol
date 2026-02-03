@@ -32,6 +32,7 @@ test-ledger/
 # Keys - NEVER commit
 *.json
 !package.json
+!package-lock.json
 !tsconfig.json
 !Cargo.toml
 !Anchor.toml
