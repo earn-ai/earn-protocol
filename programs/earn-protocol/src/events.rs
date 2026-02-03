@@ -28,6 +28,20 @@ pub struct FeeCollected {
     pub timestamp: i64,
 }
 
+/// Emitted when fees are collected from a swap (Fee Interception Layer)
+#[event]
+pub struct FeeCollectedFromSwap {
+    pub token_mint: Pubkey,
+    pub user: Pubkey,
+    pub swap_output_amount: u64,
+    pub total_fee: u64,
+    pub protocol_amount: u64,
+    pub creator_amount: u64,
+    pub buyback_amount: u64,
+    pub staker_amount: u64,
+    pub timestamp: i64,
+}
+
 /// Emitted when a user stakes tokens
 #[event]
 pub struct Staked {

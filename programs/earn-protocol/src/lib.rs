@@ -60,6 +60,20 @@ pub mod earn_protocol {
         instructions::collect_fee::collect_fee(ctx, trade_amount)
     }
 
+    /// Collect fee from a swap output (Fee Interception Layer)
+    /// 
+    /// Called AFTER Jupiter swap instruction in atomic transaction
+    /// Takes a percentage of swap output as fee and distributes to all parties
+    /// 
+    /// # Arguments
+    /// * `swap_output_amount` - The amount received from the swap (before fee)
+    pub fn collect_fee_from_swap(
+        ctx: Context<CollectFeeFromSwap>,
+        swap_output_amount: u64,
+    ) -> Result<()> {
+        instructions::collect_fee_from_swap::collect_fee_from_swap(ctx, swap_output_amount)
+    }
+
     /// Stake tokens in the staking pool
     /// 
     /// Creates StakeAccount PDA if first time staking

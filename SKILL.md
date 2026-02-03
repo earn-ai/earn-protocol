@@ -35,19 +35,55 @@ curl -X POST https://earn-protocol.onrender.com/earn/register \
 - `creator` — 2% fee, 30% to creator (builder revenue)
 - `community` — 2% fee, 50% to stakers (holder rewards)
 
-### 2. Execute Trades (Fee Collection)
+### 2. Swap with Automatic Fees (Jupiter Integration)
 
+**Get a quote first:**
 ```bash
-curl -X POST https://earn-protocol.onrender.com/earn/trade \
+curl "https://earn-protocol.onrender.com/earn/swap/quote?tokenMint=YOUR_TOKEN&inputMint=So11111111111111111111111111111111111111112&outputMint=YOUR_TOKEN&amount=1000000000"
+```
+
+**Build swap transaction:**
+```bash
+curl -X POST https://earn-protocol.onrender.com/earn/swap \
   -H "Content-Type: application/json" \
   -d '{
-    "tokenMint": "YourTokenMint",
-    "inputToken": "So11111111111111111111111111111111111111112",
-    "outputToken": "YourTokenMint",
-    "amount": "1000000000",
-    "slippageBps": 300,
-    "userWallet": "WalletAddress"
+    "tokenMint": "YOUR_TOKEN_MINT",
+    "inputMint": "So11111111111111111111111111111111111111112",
+    "outputMint": "YOUR_TOKEN_MINT",
+    "amount": 1000000000,
+    "userPublicKey": "YOUR_WALLET",
+    "slippageBps": 100
   }'
+```
+
+**Response:**
+```json
+{
+  "transaction": "base64_encoded_transaction",
+  "quote": {
+    "inputAmount": 1000000000,
+    "outputAmount": 980000000,
+    "feeAmount": 20000000,
+    "feeSplits": {
+      "protocol": 2000000,
+      "creator": 4000000,
+      "buyback": 7000000,
+      "stakers": 7000000
+    },
+    "priceImpact": 0.5,
+    "route": ["Raydium", "Orca"]
+  },
+  "expiresAt": 1738573800000
+}
+```
+
+**How it works:**
+1. We fetch the best route from Jupiter
+2. Build atomic transaction: swap + fee collection
+3. You sign and submit
+4. Swap + fees happen in ONE transaction (atomic)
+
+**No custody** — we never touch your funds. You sign everything.
 ```
 
 ### 3. Stake Tokens
