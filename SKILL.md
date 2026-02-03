@@ -173,7 +173,71 @@ await registerToken(
 
 ---
 
-## 4. Collect Fees from Jupiter Swaps
+## 4. Initialize Token Accounts (CRITICAL)
+
+**Before any fees can be distributed, ALL recipient accounts must exist!**
+
+```typescript
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
+
+async function ensureTokenAccountsExist(
+  tokenMint: PublicKey,
+  creator: PublicKey,
+  protocolWallet: PublicKey
+) {
+  const instructions = [];
+  
+  // Creator's token account (receives creator fees)
+  const creatorATA = await getAssociatedTokenAddress(tokenMint, creator);
+  const creatorAccountInfo = await connection.getAccountInfo(creatorATA);
+  if (!creatorAccountInfo) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey, // payer
+        creatorATA,
+        creator,
+        tokenMint
+      )
+    );
+    console.log('Creating creator token account:', creatorATA.toBase58());
+  }
+  
+  // Protocol's token account (receives protocol fees)  
+  const protocolATA = await getAssociatedTokenAddress(tokenMint, protocolWallet);
+  const protocolAccountInfo = await connection.getAccountInfo(protocolATA);
+  if (!protocolAccountInfo) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey,
+        protocolATA,
+        protocolWallet,
+        tokenMint
+      )
+    );
+    console.log('Creating protocol token account:', protocolATA.toBase58());
+  }
+  
+  // Execute if any accounts need creation
+  if (instructions.length > 0) {
+    const tx = new Transaction().add(...instructions);
+    await sendAndConfirmTransaction(connection, tx, [wallet.payer]);
+    console.log('Token accounts initialized');
+  }
+  
+  return { creatorATA, protocolATA };
+}
+
+// CALL THIS AFTER REGISTERING A TOKEN!
+await ensureTokenAccountsExist(
+  tokenMint,
+  creatorWallet,
+  new PublicKey('YOUR_PROTOCOL_WALLET')
+);
+```
+
+---
+
+## 5. Collect Fees from Jupiter Swaps
 
 The key insight: wrap Jupiter swaps with fee collection.
 
@@ -239,7 +303,7 @@ async function swapWithFees(
 
 ---
 
-## 5. Staking System
+## 6. Staking System
 
 ### Initialize Staking Pool (done during registerToken)
 
@@ -345,7 +409,7 @@ async function getPendingRewards(
 
 ---
 
-## 6. Query On-Chain State
+## 7. Query On-Chain State
 
 ```typescript
 // Get token config
@@ -404,7 +468,7 @@ async function getStakers(tokenMint: PublicKey) {
 
 ---
 
-## 7. Execute Buybacks
+## 8. Execute Buybacks
 
 ```typescript
 async function executeBuyback(
@@ -540,6 +604,71 @@ Once deployed:
 - ✅ Your fee revenue
 
 No dependency on any external service. Pure on-chain infrastructure.
+
+---
+
+## Troubleshooting
+
+### Creator not receiving fees?
+
+1. **Is creatorTokenAccount initialized?**
+   ```typescript
+   const creatorATA = await getAssociatedTokenAddress(tokenMint, creator);
+   const info = await connection.getAccountInfo(creatorATA);
+   if (!info) {
+     console.log('ERROR: Creator token account does not exist!');
+     // Create it - see Section 4
+   }
+   ```
+
+2. **Is creatorTokenAccount correctly derived in swap instruction?**
+   ```typescript
+   // Must match the creator stored in token_config
+   const config = await getTokenConfig(tokenMint);
+   const creatorATA = await getAssociatedTokenAddress(tokenMint, config.creator);
+   ```
+
+3. **Are you calling collectFeeFromSwap after each swap?**
+   ```typescript
+   // The fee instruction MUST be added AFTER the Jupiter swap
+   transaction.add(...jupiterSwapInstructions);
+   transaction.add(feeCollectionInstruction);  // <-- This!
+   ```
+
+4. **Check the on-chain stats:**
+   ```typescript
+   const config = await getTokenConfig(tokenMint);
+   console.log('Total creator fees:', config.totalCreatorFees.toString());
+   // If this is 0, fees aren't being collected
+   ```
+
+### Stakers not receiving rewards?
+
+1. **Are fees flowing to the staking pool?**
+   ```typescript
+   const pool = await getStakingPool(tokenMint);
+   console.log('Total rewards distributed:', pool.totalRewardsDistributed.toString());
+   ```
+
+2. **Is anyone staking?**
+   ```typescript
+   console.log('Total staked:', pool.totalStaked.toString());
+   console.log('Staker count:', pool.stakerCount);
+   // If 0, rewards have nowhere to go
+   ```
+
+3. **Check reward rate:**
+   ```typescript
+   console.log('Reward per token:', pool.rewardPerTokenStored.toString());
+   // This should increase with each fee collection
+   ```
+
+### Transaction failing?
+
+1. **Check all accounts exist** (Section 4)
+2. **Check token is registered:** `await getTokenConfig(tokenMint)`
+3. **Check token is active:** `config.isActive === true`
+4. **Check slippage settings** - if actual output < expected, fee collection adjusts automatically
 
 ---
 
