@@ -334,6 +334,7 @@ export interface OnboardRequest extends IdempotentRequest {
   tokenMint: string;
   creatorWallet?: string;  // Optional - defaults to Earn wallet
   intent: OnboardIntent;   // Which template strategy to use
+  network?: 'mainnet' | 'devnet';  // Which network to check (default: tries both)
 }
 
 /**

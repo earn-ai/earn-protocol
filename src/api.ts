@@ -571,11 +571,36 @@ app.post('/earn/register', async (req: Request, res: Response) => {
 
 /**
  * Verify a token exists on Solana and get its metadata
+ * Tries mainnet first, then devnet if not found
  */
-async function verifyToken(mint: string): Promise<TokenVerification> {
+async function verifyToken(mint: string, network?: 'mainnet' | 'devnet'): Promise<TokenVerification> {
+  const networks = network 
+    ? [network] 
+    : ['mainnet', 'devnet'] as const;
+  
+  for (const net of networks) {
+    const rpcUrl = net === 'devnet' 
+      ? 'https://api.devnet.solana.com'
+      : process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    
+    const conn = new Connection(rpcUrl, 'confirmed');
+    const result = await verifyTokenOnNetwork(mint, conn, net);
+    if (result.exists) {
+      return result;
+    }
+  }
+  
+  return { exists: false, mint };
+}
+
+async function verifyTokenOnNetwork(
+  mint: string, 
+  conn: Connection,
+  network: string
+): Promise<TokenVerification & { network?: string }> {
   try {
     const mintPubkey = new PublicKey(mint);
-    const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
+    const mintInfo = await conn.getParsedAccountInfo(mintPubkey);
     
     if (!mintInfo.value) {
       return { exists: false, mint };
@@ -593,7 +618,7 @@ async function verifyToken(mint: string): Promise<TokenVerification> {
     let topHolderConcentration = 0;
     
     try {
-      const tokenAccounts = await connection.getTokenLargestAccounts(mintPubkey);
+      const tokenAccounts = await conn.getTokenLargestAccounts(mintPubkey);
       holderCount = tokenAccounts.value.length;
       
       // Calculate top 10 holder concentration
@@ -616,6 +641,7 @@ async function verifyToken(mint: string): Promise<TokenVerification> {
       freezeAuthority: info.freezeAuthority,
       holderCount,
       topHolderConcentration,
+      network,
     };
   } catch (error) {
     return { exists: false, mint };
@@ -705,8 +731,8 @@ app.post('/earn/onboard', async (req: Request, res: Response) => {
 
     updateOperation(operation.operationId, { status: 'processing' });
 
-    // STEP 1: Verify token exists on Solana
-    const verification = await verifyToken(body.tokenMint);
+    // STEP 1: Verify token exists on Solana (tries mainnet then devnet)
+    const verification = await verifyToken(body.tokenMint, body.network);
     
     if (!verification.exists) {
       return res.status(404).json({
