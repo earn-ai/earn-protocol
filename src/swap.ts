@@ -30,16 +30,26 @@ export interface SwapRequest {
 
 export interface SwapResponse {
   transaction: string;         // Base64 serialized transaction
-  expectedOutput: string;      // Expected output amount
-  feeAmount: string;           // Fee amount that will be collected
-  feeBreakdown: {
-    earnShare: string;
-    creatorShare: string;
-    buybackShare: string;
-    stakingShare: string;
+  quote: {
+    inputAmount: number;
+    outputAmount: number;      // Net output after fees
+    feeAmount: number;
+    feeSplits: {
+      protocol: number;
+      creator: number;
+      buyback: number;
+      stakers: number;
+    };
+    priceImpact: number;
+    route: string[];           // Jupiter route labels
   };
-  priceImpact: string;
-  route: any;                  // Jupiter route info
+  expiresAt: number;           // Unix timestamp (1 min expiry)
+}
+
+export interface SwapError {
+  error: string;
+  code: 'TOKEN_NOT_REGISTERED' | 'INSUFFICIENT_LIQUIDITY' | 'SLIPPAGE_EXCEEDED' | 'QUOTE_FAILED';
+  details?: any;
 }
 
 export interface TokenConfig {
@@ -329,20 +339,28 @@ export class SwapBuilder {
       .serialize({ requireAllSignatures: false })
       .toString('base64');
 
+    // Extract route labels
+    const routeLabels = quote.routePlan?.map((r: any) => r.swapInfo?.label || 'Unknown') || [];
+    const netOutput = Number(outputAmount - totalFee);
+
     return {
-      // Return Jupiter transaction - fee instructions need to be added client-side
-      // or we need to build a more sophisticated combiner
+      // Note: This returns Jupiter transaction only - fee instructions separate
+      // Use buildAtomicSwapWithFees for combined atomic transaction
       transaction: swapTransaction,
-      expectedOutput: quote.outAmount,
-      feeAmount: totalFee.toString(),
-      feeBreakdown: {
-        earnShare: earnShare.toString(),
-        creatorShare: creatorShare.toString(),
-        buybackShare: buybackShare.toString(),
-        stakingShare: stakingShare.toString(),
+      quote: {
+        inputAmount: request.amount,
+        outputAmount: netOutput,
+        feeAmount: Number(totalFee),
+        feeSplits: {
+          protocol: Number(earnShare),
+          creator: Number(creatorShare),
+          buyback: Number(buybackShare),
+          stakers: Number(stakingShare),
+        },
+        priceImpact: parseFloat(quote.priceImpactPct || '0'),
+        route: routeLabels,
       },
-      priceImpact: quote.priceImpactPct,
-      route: quote.routePlan,
+      expiresAt: Date.now() + 60000,
     };
   }
 
@@ -458,18 +476,28 @@ export class SwapBuilder {
       .serialize({ requireAllSignatures: false })
       .toString('base64');
 
+    // Extract route labels from Jupiter route plan
+    const routeLabels = quote.routePlan?.map((r: any) => r.swapInfo?.label || 'Unknown') || [];
+
+    // Net output after fees
+    const netOutput = Number(outputAmount - totalFee);
+
     return {
       transaction: serializedTx,
-      expectedOutput: quote.outAmount,
-      feeAmount: totalFee.toString(),
-      feeBreakdown: {
-        earnShare: earnShare.toString(),
-        creatorShare: creatorShare.toString(),
-        buybackShare: buybackShare.toString(),
-        stakingShare: stakingShare.toString(),
+      quote: {
+        inputAmount: request.amount,
+        outputAmount: netOutput,
+        feeAmount: Number(totalFee),
+        feeSplits: {
+          protocol: Number(earnShare),
+          creator: Number(creatorShare),
+          buyback: Number(buybackShare),
+          stakers: Number(stakingShare),
+        },
+        priceImpact: parseFloat(quote.priceImpactPct || '0'),
+        route: routeLabels,
       },
-      priceImpact: quote.priceImpactPct,
-      route: quote.routePlan,
+      expiresAt: Date.now() + 60000, // 1 minute expiry
     };
   }
 }

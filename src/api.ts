@@ -1005,8 +1005,8 @@ app.post('/earn/swap', async (req: Request, res: Response) => {
     if (!config) {
       return res.status(404).json({
         error: 'Token not registered with Earn Protocol',
-        tokenMint,
-        hint: 'Register the token first with POST /earn/register',
+        code: 'TOKEN_NOT_REGISTERED',
+        details: { tokenMint },
       });
     }
 
@@ -1014,9 +1014,8 @@ app.post('/earn/swap', async (req: Request, res: Response) => {
     if (tokenMint !== inputMint && tokenMint !== outputMint) {
       return res.status(400).json({
         error: 'Token must be either inputMint or outputMint',
-        tokenMint,
-        inputMint,
-        outputMint,
+        code: 'TOKEN_NOT_REGISTERED',
+        details: { tokenMint, inputMint, outputMint },
       });
     }
 
@@ -1045,29 +1044,27 @@ app.post('/earn/swap', async (req: Request, res: Response) => {
       swapConfig
     );
 
+    // Return in the specified format
     res.json({
-      success: true,
       transaction: result.transaction,
-      expectedOutput: result.expectedOutput,
-      fee: {
-        total: result.feeAmount,
-        breakdown: result.feeBreakdown,
-        percent: config.feePercent,
-      },
-      priceImpact: result.priceImpact,
-      route: result.route,
-      instructions: [
-        'Transaction is base64 encoded and unsigned',
-        'Deserialize with VersionedTransaction.deserialize() or Transaction.from()',
-        'Sign with user wallet',
-        'Submit to Solana network',
-      ],
+      quote: result.quote,
+      expiresAt: result.expiresAt,
     });
   } catch (error: any) {
     console.error('Swap error:', error);
+    
+    // Determine error code based on message
+    let code = 'QUOTE_FAILED';
+    if (error.message?.includes('No routes') || error.message?.includes('liquidity')) {
+      code = 'INSUFFICIENT_LIQUIDITY';
+    } else if (error.message?.includes('slippage')) {
+      code = 'SLIPPAGE_EXCEEDED';
+    }
+    
     res.status(500).json({
-      error: 'Swap transaction build failed',
-      message: error.message,
+      error: error.message || 'Swap transaction build failed',
+      code,
+      details: error.details,
     });
   }
 });
@@ -1094,7 +1091,8 @@ app.get('/earn/swap/quote', async (req: Request, res: Response) => {
     if (!config) {
       return res.status(404).json({
         error: 'Token not registered with Earn Protocol',
-        tokenMint,
+        code: 'TOKEN_NOT_REGISTERED',
+        details: { tokenMint },
       });
     }
 
@@ -1118,31 +1116,37 @@ app.get('/earn/swap/quote', async (req: Request, res: Response) => {
 
     // Net output after fees
     const netOutput = outputAmount - totalFee;
+    
+    // Extract route labels
+    const routeLabels = quote.routePlan?.map((r: any) => r.swapInfo?.label || 'Unknown') || [];
 
     res.json({
-      inputMint: quote.inputMint,
-      outputMint: quote.outputMint,
-      inputAmount: quote.inAmount,
-      grossOutput: quote.outAmount,
-      fee: {
-        total: totalFee.toString(),
-        percent: config.feePercent,
-        breakdown: {
-          earnShare: earnShare.toString(),
-          creatorShare: creatorShare.toString(),
-          buybackShare: buybackShare.toString(),
-          stakingShare: stakingShare.toString(),
+      quote: {
+        inputAmount: parseInt(amount as string),
+        outputAmount: Number(netOutput),
+        feeAmount: Number(totalFee),
+        feeSplits: {
+          protocol: Number(earnShare),
+          creator: Number(creatorShare),
+          buyback: Number(buybackShare),
+          stakers: Number(stakingShare),
         },
+        priceImpact: parseFloat(quote.priceImpactPct || '0'),
+        route: routeLabels,
       },
-      netOutput: netOutput.toString(),
-      priceImpact: quote.priceImpactPct,
-      route: quote.routePlan,
+      expiresAt: Date.now() + 60000, // 1 minute
     });
   } catch (error: any) {
     console.error('Quote error:', error);
+    
+    let code = 'QUOTE_FAILED';
+    if (error.message?.includes('No routes') || error.message?.includes('liquidity')) {
+      code = 'INSUFFICIENT_LIQUIDITY';
+    }
+    
     res.status(500).json({
-      error: 'Quote failed',
-      message: error.message,
+      error: error.message || 'Quote failed',
+      code,
     });
   }
 });
