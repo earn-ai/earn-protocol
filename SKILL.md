@@ -1,268 +1,550 @@
+# Earn Protocol - Agent Skill
+
+**Deploy your own tokenomics infrastructure. No dependencies. You own everything.**
+
+This skill teaches you to:
+1. Deploy the Earn Protocol Anchor program
+2. Register tokens with fee structures
+3. Initialize staking pools
+4. Collect fees from Jupiter swaps
+5. Distribute rewards to stakers
+6. Query all on-chain state
+
 ---
-name: earn-protocol
-version: 1.0.0
-description: Tokenomics-as-a-service for memecoins. Use this skill when an agent needs to add fee collection, buybacks, staking rewards, or creator revenue sharing to any SPL token. Register any token from pump.fun, Raydium, or Meteora to get instant tokenomics.
-homepage: https://github.com/earn-ai/earn-protocol
-metadata: {"category":"defi","api_base":"https://earn-protocol.onrender.com","network":"solana-devnet","prize_integration":"colosseum-agent-hackathon"}
+
+## Prerequisites
+
+```bash
+# Install Solana CLI
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.4/install)"
+
+# Install Anchor
+cargo install --git https://github.com/coral-xyz/anchor avm --locked
+avm install 0.29.0
+avm use 0.29.0
+
+# Install dependencies
+npm install @solana/web3.js @coral-xyz/anchor @solana/spl-token
+```
+
 ---
 
-# Earn Protocol
+## 1. Deploy Your Own Program
 
-Tokenomics-as-a-service. Turn any memecoin into a real economy with one API call.
-
-## When to Use This Skill
-
-- You launched a token and want staking/buybacks/creator rewards
-- You're building a DEX and want to offer enhanced tokenomics
-- You want to check token stats, staking APY, or fee distribution
-- You need to execute trades with automatic fee collection
-
-## Quick Start
-
-### 1. Register Your Token
+Clone and deploy:
 
 ```bash
-curl -X POST https://earn-protocol.onrender.com/earn/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tokenMint": "YourTokenMintAddress",
-    "template": "community"
-  }'
+git clone https://github.com/earn-ai/earn-protocol
+cd earn-protocol
+
+# Set your keypair
+solana config set --keypair ~/.config/solana/id.json
+solana config set --url devnet  # or mainnet-beta
+
+# Build and deploy
+anchor build
+anchor deploy
+
+# Save your program ID
+echo "Program ID: $(solana address -k target/deploy/earn_protocol-keypair.json)"
 ```
 
-**Templates:**
-- `degen` — 3% fee, 50% buybacks (aggressive price support)
-- `creator` — 2% fee, 30% to creator (builder revenue)
-- `community` — 2% fee, 50% to stakers (holder rewards)
+Update `Anchor.toml` and `lib.rs` with your program ID:
 
-### 2. Swap with Automatic Fees (Jupiter Integration)
-
-**Get a quote first:**
-```bash
-curl "https://earn-protocol.onrender.com/earn/swap/quote?tokenMint=YOUR_TOKEN&inputMint=So11111111111111111111111111111111111111112&outputMint=YOUR_TOKEN&amount=1000000000"
+```toml
+# Anchor.toml
+[programs.devnet]
+earn_protocol = "YOUR_PROGRAM_ID"
 ```
 
-**Build swap transaction:**
-```bash
-curl -X POST https://earn-protocol.onrender.com/earn/swap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tokenMint": "YOUR_TOKEN_MINT",
-    "inputMint": "So11111111111111111111111111111111111111112",
-    "outputMint": "YOUR_TOKEN_MINT",
-    "amount": 1000000000,
-    "userPublicKey": "YOUR_WALLET",
-    "slippageBps": 100
-  }'
+```rust
+// lib.rs
+declare_id!("YOUR_PROGRAM_ID");
 ```
 
-**Response:**
-```json
-{
-  "transaction": "base64_encoded_transaction",
-  "quote": {
-    "inputAmount": 1000000000,
-    "outputAmount": 980000000,
-    "feeAmount": 20000000,
-    "feeSplits": {
-      "protocol": 2000000,
-      "creator": 4000000,
-      "buyback": 7000000,
-      "stakers": 7000000
-    },
-    "priceImpact": 0.5,
-    "route": ["Raydium", "Orca"]
-  },
-  "expiresAt": 1738573800000
-}
-```
+---
 
-**How it works:**
-1. We fetch the best route from Jupiter
-2. Build atomic transaction: swap + fee collection
-3. You sign and submit
-4. Swap + fees happen in ONE transaction (atomic)
-
-**No custody** — we never touch your funds. You sign everything.
-```
-
-### 3. Stake Tokens
-
-```bash
-curl -X POST https://earn-protocol.onrender.com/earn/stake \
-  -H "Content-Type: application/json" \
-  -H "x-wallet: WalletAddress" \
-  -d '{
-    "tokenMint": "YourTokenMint",
-    "amount": 1000000000
-  }'
-```
-
-### 4. Check Rewards
-
-```bash
-curl https://earn-protocol.onrender.com/earn/rewards/TOKEN_MINT/WALLET
-```
-
-### 5. Claim Rewards
-
-```bash
-curl -X POST https://earn-protocol.onrender.com/earn/claim \
-  -H "Content-Type: application/json" \
-  -H "x-wallet: WalletAddress" \
-  -d '{
-    "tokenMint": "YourTokenMint"
-  }'
-```
-
-## API Reference
-
-### Public Endpoints (No Auth)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /health | Health check |
-| GET | /earn/tokens | List all registered tokens |
-| GET | /earn/token/:mint | Get token config and stats |
-| GET | /earn/token/:mint/stats | Detailed stats |
-| GET | /earn/rewards/:mint/:wallet | Check pending rewards |
-| GET | /earn/stake/:mint/:wallet | Check stake position |
-| GET | /earn/stats | Global protocol stats |
-| GET | /earn/templates | List available templates |
-| GET | /earn/leaderboard | Top tokens by volume |
-| GET | /earn/operation/:id | Check operation status |
-
-### Mutating Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | /earn/register | Register a token |
-| POST | /earn/trade | Execute trade with fees |
-| POST | /earn/stake | Stake tokens |
-| POST | /earn/unstake | Unstake tokens |
-| POST | /earn/claim | Claim rewards |
-| POST | /earn/buyback/:mint | Trigger buyback |
-
-## Fee Distribution
-
-Default split (2% fee):
-
-| Recipient | Share | Purpose |
-|-----------|-------|---------|
-| Earn Protocol | 10% | Infrastructure |
-| Creator | 20% | Sustainable revenue |
-| Buyback | 35% | Price support |
-| Stakers | 35% | Holder rewards |
-
-## Idempotency
-
-All mutating endpoints support idempotency keys for safe retries:
-
-```bash
-curl -X POST https://earn-protocol.onrender.com/earn/stake \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: stake-unique-123" \
-  -d '{"tokenMint": "...", "amount": 1000000}'
-```
-
-Same key = same response. Safe to retry.
-
-## Error Codes
-
-| Code | Meaning |
-|------|---------|
-| 400 | Invalid request |
-| 404 | Token not registered |
-| 409 | Already registered |
-| 429 | Rate limited |
-| 500 | Server error (retry) |
-
-## Integration Examples
-
-### For DEX Agents (Route Swaps Through Earn)
-
-```javascript
-// Your swap handler
-async function handleSwap(params) {
-  const result = await fetch('https://earn-protocol.onrender.com/earn/trade', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tokenMint: params.outputMint,
-      inputToken: params.inputMint,
-      outputToken: params.outputMint,
-      amount: params.amount,
-      slippageBps: 300,
-      userWallet: params.user
-    })
-  });
-  return result.json();
-}
-```
-
-### For Token Launchers (Register at Launch)
-
-```javascript
-// After token creation
-await fetch('https://earn-protocol.onrender.com/earn/register', {
-  method: 'POST',
-  headers: { 
-    'Content-Type': 'application/json',
-    'x-creator-wallet': creatorWallet
-  },
-  body: JSON.stringify({
-    tokenMint: newTokenMint,
-    template: 'community'
-  })
-});
-// Token now has full tokenomics
-```
-
-### For Yield Aggregators
-
-```javascript
-// Get staking APY for display
-const stats = await fetch(
-  `https://earn-protocol.onrender.com/earn/token/${tokenMint}/stats`
-).then(r => r.json());
-
-console.log(`Staking APY: ${stats.staking.currentApy}%`);
-```
-
-## TypeScript SDK
+## 2. Initialize Protocol (One-time Setup)
 
 ```typescript
-import { EarnSDK } from '@earn-protocol/sdk';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Program, AnchorProvider, Wallet } from '@coral-xyz/anchor';
+import { IDL } from './target/types/earn_protocol';
 
-const earn = new EarnSDK({
-  baseUrl: 'https://earn-protocol.onrender.com',
-  network: 'devnet'
-});
+const connection = new Connection('https://api.devnet.solana.com');
+const wallet = new Wallet(YOUR_KEYPAIR);
+const provider = new AnchorProvider(connection, wallet, {});
+const program = new Program(IDL, YOUR_PROGRAM_ID, provider);
 
-// Register token
-await earn.register({
-  tokenMint: 'YourToken...',
-  template: 'community',
-  creatorWallet: myWallet
-});
+// Initialize master treasury (your protocol's revenue account)
+async function initializeProtocol() {
+  const [masterTreasury] = PublicKey.findProgramAddressSync(
+    [Buffer.from('earn_master')],
+    program.programId
+  );
 
-// Stake
-await earn.stake({
-  tokenMint: 'YourToken...',
-  amount: 1_000_000_000,
-  userWallet: myWallet
-});
+  await program.methods
+    .initializeMasterTreasury()
+    .accounts({
+      authority: wallet.publicKey,
+      earnMasterTreasury: masterTreasury,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
 
-// Check rewards
-const { pendingRewards } = await earn.getRewards('YourToken...', myWallet);
+  console.log('Protocol initialized. Master treasury:', masterTreasury.toBase58());
+}
 ```
-
-## Support
-
-- **Repo:** https://github.com/earn-ai/earn-protocol
-- **Forum:** Colosseum Post #48, #89, #93
-- **Integration Docs:** https://github.com/earn-ai/earn-protocol/tree/main/docs/integrations
 
 ---
 
-*Built by Earn 🤝 for the Colosseum Agent Hackathon*
+## 3. Register a Token
+
+```typescript
+interface TokenConfig {
+  feeBps: number;        // Fee on trades (200 = 2%)
+  earnCutBps: number;    // Your protocol cut (1000 = 10%)
+  creatorCutBps: number; // Creator cut (2000 = 20%)
+  buybackCutBps: number; // Buyback allocation (3500 = 35%)
+  stakingCutBps: number; // Staking rewards (3500 = 35%)
+}
+
+async function registerToken(
+  tokenMint: PublicKey,
+  creator: PublicKey,
+  config: TokenConfig
+) {
+  // Derive PDAs
+  const [tokenConfig] = PublicKey.findProgramAddressSync(
+    [Buffer.from('token_config'), tokenMint.toBuffer()],
+    program.programId
+  );
+  
+  const [treasury] = PublicKey.findProgramAddressSync(
+    [Buffer.from('treasury'), tokenMint.toBuffer()],
+    program.programId
+  );
+  
+  const [stakingPool] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), tokenMint.toBuffer()],
+    program.programId
+  );
+
+  await program.methods
+    .registerToken(
+      config.feeBps,
+      config.earnCutBps,
+      config.creatorCutBps,
+      config.buybackCutBps,
+      config.stakingCutBps
+    )
+    .accounts({
+      creator,
+      tokenMint,
+      tokenConfig,
+      treasury,
+      stakingPool,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  console.log('Token registered!');
+  console.log('  Config PDA:', tokenConfig.toBase58());
+  console.log('  Treasury PDA:', treasury.toBase58());
+  console.log('  Staking Pool PDA:', stakingPool.toBase58());
+  
+  return { tokenConfig, treasury, stakingPool };
+}
+
+// Templates for quick setup
+const TEMPLATES = {
+  degen: { feeBps: 300, earnCutBps: 1000, creatorCutBps: 1000, buybackCutBps: 5000, stakingCutBps: 3000 },
+  creator: { feeBps: 200, earnCutBps: 1000, creatorCutBps: 3000, buybackCutBps: 3000, stakingCutBps: 3000 },
+  community: { feeBps: 200, earnCutBps: 1000, creatorCutBps: 1000, buybackCutBps: 3000, stakingCutBps: 5000 },
+};
+
+// Usage
+await registerToken(
+  new PublicKey('YOUR_TOKEN_MINT'),
+  wallet.publicKey,
+  TEMPLATES.community
+);
+```
+
+---
+
+## 4. Collect Fees from Jupiter Swaps
+
+The key insight: wrap Jupiter swaps with fee collection.
+
+```typescript
+import { Jupiter } from '@jup-ag/core';
+
+async function swapWithFees(
+  tokenMint: PublicKey,
+  inputMint: PublicKey,
+  outputMint: PublicKey,
+  amount: number,
+  userWallet: PublicKey
+) {
+  // 1. Get token config for fee calculation
+  const [tokenConfigPDA] = PublicKey.findProgramAddressSync(
+    [Buffer.from('token_config'), tokenMint.toBuffer()],
+    program.programId
+  );
+  const config = await program.account.tokenConfig.fetch(tokenConfigPDA);
+  
+  // 2. Get Jupiter quote
+  const jupiter = await Jupiter.load({ connection, user: userWallet });
+  const routes = await jupiter.computeRoutes({
+    inputMint,
+    outputMint,
+    amount,
+    slippageBps: 100,
+  });
+  
+  const bestRoute = routes.routesInfos[0];
+  
+  // 3. Calculate fee from output
+  const outputAmount = BigInt(bestRoute.outAmount);
+  const feeBps = config.feeBps;
+  const totalFee = (outputAmount * BigInt(feeBps)) / 10000n;
+  
+  // 4. Build atomic transaction: Jupiter swap + fee collection
+  const { swapTransaction } = await jupiter.exchange({ routeInfo: bestRoute });
+  
+  // 5. Add fee collection instruction
+  const feeInstruction = await program.methods
+    .collectFeeFromSwap(totalFee)
+    .accounts({
+      tokenMint,
+      tokenConfig: tokenConfigPDA,
+      userTokenAccount: getAssociatedTokenAddress(tokenMint, userWallet),
+      treasuryTokenAccount: getTreasuryTokenAccount(tokenMint),
+      stakingRewardsAccount: getStakingRewardsAccount(tokenMint),
+      creatorTokenAccount: getCreatorTokenAccount(config.creator, tokenMint),
+      earnTokenAccount: getEarnTokenAccount(tokenMint),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+  
+  // 6. Combine into single atomic transaction
+  const transaction = new Transaction();
+  transaction.add(...swapTransaction.instructions);
+  transaction.add(feeInstruction);
+  
+  return transaction;
+}
+```
+
+---
+
+## 5. Staking System
+
+### Initialize Staking Pool (done during registerToken)
+
+The staking pool is created automatically when you register a token.
+
+### User Stakes Tokens
+
+```typescript
+async function stake(
+  tokenMint: PublicKey,
+  userWallet: PublicKey,
+  amount: bigint
+) {
+  const [stakingPool] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), tokenMint.toBuffer()],
+    program.programId
+  );
+  
+  const [stakeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('stake'), tokenMint.toBuffer(), userWallet.toBuffer()],
+    program.programId
+  );
+
+  await program.methods
+    .stake(amount)
+    .accounts({
+      staker: userWallet,
+      tokenMint,
+      stakingPool,
+      stakeAccount,
+      stakerTokenAccount: getAssociatedTokenAddress(tokenMint, userWallet),
+      stakingTokenAccount: getStakingTokenAccount(tokenMint),
+      tokenProgram: TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+}
+```
+
+### User Unstakes + Claims Rewards
+
+```typescript
+async function unstake(
+  tokenMint: PublicKey,
+  userWallet: PublicKey,
+  amount: bigint
+) {
+  const [stakingPool] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), tokenMint.toBuffer()],
+    program.programId
+  );
+  
+  const [stakeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('stake'), tokenMint.toBuffer(), userWallet.toBuffer()],
+    program.programId
+  );
+
+  // Unstake returns tokens + any pending rewards
+  await program.methods
+    .unstake(amount)
+    .accounts({
+      staker: userWallet,
+      tokenMint,
+      stakingPool,
+      stakeAccount,
+      stakerTokenAccount: getAssociatedTokenAddress(tokenMint, userWallet),
+      stakingTokenAccount: getStakingTokenAccount(tokenMint),
+      rewardsTokenAccount: getRewardsTokenAccount(tokenMint),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+}
+```
+
+### Calculate Pending Rewards
+
+```typescript
+async function getPendingRewards(
+  tokenMint: PublicKey,
+  userWallet: PublicKey
+): Promise<bigint> {
+  const [stakingPool] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), tokenMint.toBuffer()],
+    program.programId
+  );
+  
+  const [stakeAccount] = PublicKey.findProgramAddressSync(
+    [Buffer.from('stake'), tokenMint.toBuffer(), userWallet.toBuffer()],
+    program.programId
+  );
+
+  const pool = await program.account.stakingPool.fetch(stakingPool);
+  const stake = await program.account.stakeAccount.fetch(stakeAccount);
+  
+  // Reward calculation: (stakedAmount * (currentRewardPerToken - paidRewardPerToken)) / PRECISION
+  const PRECISION = 1_000_000_000_000_000_000n; // 1e18
+  const rewardPerTokenDelta = pool.rewardPerTokenStored - stake.rewardPerTokenPaid;
+  const newRewards = (stake.stakedAmount * rewardPerTokenDelta) / PRECISION;
+  
+  return stake.pendingRewards + newRewards;
+}
+```
+
+---
+
+## 6. Query On-Chain State
+
+```typescript
+// Get token config
+async function getTokenConfig(tokenMint: PublicKey) {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('token_config'), tokenMint.toBuffer()],
+    program.programId
+  );
+  return program.account.tokenConfig.fetch(pda);
+}
+
+// Get treasury stats
+async function getTreasury(tokenMint: PublicKey) {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('treasury'), tokenMint.toBuffer()],
+    program.programId
+  );
+  return program.account.treasury.fetch(pda);
+}
+
+// Get staking pool stats
+async function getStakingPool(tokenMint: PublicKey) {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), tokenMint.toBuffer()],
+    program.programId
+  );
+  return program.account.stakingPool.fetch(pda);
+}
+
+// Get user's stake position
+async function getStakePosition(tokenMint: PublicKey, userWallet: PublicKey) {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('stake'), tokenMint.toBuffer(), userWallet.toBuffer()],
+    program.programId
+  );
+  return program.account.stakeAccount.fetch(pda);
+}
+
+// List all registered tokens
+async function getAllTokens() {
+  return program.account.tokenConfig.all();
+}
+
+// Get all stakers for a token
+async function getStakers(tokenMint: PublicKey) {
+  return program.account.stakeAccount.all([
+    {
+      memcmp: {
+        offset: 8 + 32, // After discriminator + owner
+        bytes: tokenMint.toBase58(),
+      },
+    },
+  ]);
+}
+```
+
+---
+
+## 7. Execute Buybacks
+
+```typescript
+async function executeBuyback(
+  tokenMint: PublicKey,
+  amount: bigint,
+  minTokensOut: bigint
+) {
+  const [treasury] = PublicKey.findProgramAddressSync(
+    [Buffer.from('treasury'), tokenMint.toBuffer()],
+    program.programId
+  );
+
+  await program.methods
+    .executeBuyback(amount, minTokensOut)
+    .accounts({
+      executor: wallet.publicKey, // Permissionless - anyone can trigger
+      tokenMint,
+      tokenConfig: getTokenConfigPDA(tokenMint),
+      treasury,
+      tokensToBurn: getTreasuryTokenAccount(tokenMint),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .rpc();
+}
+```
+
+---
+
+## Complete Integration: Agent Token Launch
+
+```typescript
+/**
+ * Full flow: Agent launches token and adds Earn Protocol structure
+ */
+async function launchStructuredToken(
+  tokenMint: PublicKey,
+  template: 'degen' | 'creator' | 'community' = 'community'
+) {
+  const config = TEMPLATES[template];
+  
+  console.log('🚀 Launching structured token...');
+  
+  // 1. Register with Earn Protocol
+  const { tokenConfig, treasury, stakingPool } = await registerToken(
+    tokenMint,
+    wallet.publicKey,
+    config
+  );
+  
+  console.log('✅ Token registered');
+  console.log('   Fee:', config.feeBps / 100, '%');
+  console.log('   Staking rewards:', config.stakingCutBps / 100, '%');
+  console.log('   Buybacks:', config.buybackCutBps / 100, '%');
+  
+  // 2. Return everything the agent needs
+  return {
+    tokenMint: tokenMint.toBase58(),
+    pdas: {
+      tokenConfig: tokenConfig.toBase58(),
+      treasury: treasury.toBase58(),
+      stakingPool: stakingPool.toBase58(),
+    },
+    config,
+    
+    // Helper functions the agent can use
+    swap: (input, output, amount, user) => swapWithFees(tokenMint, input, output, amount, user),
+    stake: (user, amount) => stake(tokenMint, user, amount),
+    unstake: (user, amount) => unstake(tokenMint, user, amount),
+    getRewards: (user) => getPendingRewards(tokenMint, user),
+    getStats: () => getStakingPool(tokenMint),
+    executeBuyback: (amount, minOut) => executeBuyback(tokenMint, amount, minOut),
+  };
+}
+
+// Usage
+const myToken = await launchStructuredToken(
+  new PublicKey('MY_TOKEN_MINT'),
+  'community'
+);
+
+// Now agent has full control:
+await myToken.stake(userWallet, 1000000n);
+const rewards = await myToken.getRewards(userWallet);
+console.log('Pending rewards:', rewards);
+```
+
+---
+
+## File Structure
+
+```
+earn-protocol/
+├── programs/earn-protocol/
+│   └── src/
+│       ├── lib.rs              # Program entry
+│       ├── state.rs            # Account structures
+│       ├── errors.rs           # Error codes
+│       └── instructions/
+│           ├── register.rs     # Token registration
+│           ├── stake.rs        # Staking
+│           ├── unstake.rs      # Unstaking + rewards
+│           ├── claim.rs        # Claim rewards only
+│           ├── collect_fee.rs  # Fee collection
+│           └── buyback.rs      # Buyback execution
+├── src/
+│   ├── client.ts               # TypeScript client
+│   └── types.ts                # Type definitions
+├── tests/
+│   └── earn-protocol.ts        # Integration tests
+├── Anchor.toml
+└── SKILL.md                    # This file
+```
+
+---
+
+## Security Notes
+
+1. **Reentrancy Protection**: Stake accounts have `is_locked` field
+2. **Balance Checks**: Rewards capped to available balance
+3. **Mint Validation**: Rewards account must match token mint
+4. **Cooldowns**: 1 hour between buybacks
+5. **Slippage Protection**: `min_tokens_out` enforced on buybacks
+
+---
+
+## You Own Everything
+
+Once deployed:
+- ✅ Your program ID
+- ✅ Your PDAs
+- ✅ Your treasury
+- ✅ Your staking pools
+- ✅ Your fee revenue
+
+No dependency on any external service. Pure on-chain infrastructure.
+
+---
+
+## Need Help?
+
+- GitHub: https://github.com/earn-ai/earn-protocol
+- Docs: https://earn.supply/docs
+- Example deployment: See `tests/earn-protocol.ts`
