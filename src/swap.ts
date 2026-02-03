@@ -6,13 +6,19 @@ import {
   VersionedTransaction,
   TransactionMessage,
   AddressLookupTableAccount,
+  ComputeBudgetProgram,
 } from '@solana/web3.js';
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   getAssociatedTokenAddress,
   createTransferInstruction,
   getAccount,
+  getMint,
 } from '@solana/spl-token';
+
+// Constants
+const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
 // Jupiter API endpoints
 const JUPITER_QUOTE_API = 'https://quote-api.jup.ag/v6/quote';
@@ -150,8 +156,31 @@ export class SwapBuilder {
   }
 
   /**
+   * Detect if a token uses Token-2022 program
+   */
+  async getTokenProgram(tokenMint: PublicKey): Promise<PublicKey> {
+    try {
+      // Try to get mint info - if it fails with TOKEN_PROGRAM_ID, try TOKEN_2022
+      const mintInfo = await getMint(this.connection, tokenMint, 'confirmed', TOKEN_PROGRAM_ID);
+      return TOKEN_PROGRAM_ID;
+    } catch (error) {
+      try {
+        const mintInfo = await getMint(this.connection, tokenMint, 'confirmed', TOKEN_2022_PROGRAM_ID);
+        return TOKEN_2022_PROGRAM_ID;
+      } catch {
+        // Default to standard token program
+        return TOKEN_PROGRAM_ID;
+      }
+    }
+  }
+
+  /**
    * Build fee collection instructions
    * These get appended to the Jupiter swap transaction
+   * 
+   * Fee is collected on OUTPUT token regardless of swap direction:
+   * - BUY (SOL → TOKEN): fee on TOKEN output
+   * - SELL (TOKEN → SOL): fee on SOL output
    */
   async buildFeeInstructions(
     tokenMint: PublicKey,
@@ -161,37 +190,46 @@ export class SwapBuilder {
   ): Promise<TransactionInstruction[]> {
     const instructions: TransactionInstruction[] = [];
     
-    // Calculate fee amount
-    const feePercent = config.feePercent / 100; // e.g., 2 = 2%
-    const totalFee = (outputAmount * BigInt(Math.floor(feePercent * 100))) / 10000n;
+    // Calculate fee amount (config.feePercent is already in whole percentage, e.g., 2 = 2%)
+    const feeBps = config.feePercent * 100; // Convert to basis points (2% = 200 bps)
+    const totalFee = (outputAmount * BigInt(feeBps)) / 10000n;
     
     if (totalFee === 0n) {
       return instructions;
     }
 
-    // Calculate splits (in basis points, out of 10000)
+    // Calculate splits (config values are in whole percentages, e.g., 10 = 10%)
     const earnShare = (totalFee * BigInt(config.earnCut * 100)) / 10000n;
     const creatorShare = (totalFee * BigInt(config.creatorCut * 100)) / 10000n;
     const buybackShare = (totalFee * BigInt(config.buybackPercent * 100)) / 10000n;
     const stakingShare = totalFee - earnShare - creatorShare - buybackShare;
 
+    // Detect token program (Token or Token-2022)
+    const tokenProgram = await this.getTokenProgram(tokenMint);
+
     // Get user's token account
     const userTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
-      userPublicKey
+      userPublicKey,
+      false,
+      tokenProgram
     );
 
     // Earn Protocol's token account
     const earnTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
-      this.earnProtocolWallet
+      this.earnProtocolWallet,
+      false,
+      tokenProgram
     );
 
     // Creator's token account
     const creatorPubkey = new PublicKey(config.creator);
     const creatorTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
-      creatorPubkey
+      creatorPubkey,
+      false,
+      tokenProgram
     );
 
     // Treasury (for buybacks) - use creator for now, should be PDA
@@ -200,7 +238,9 @@ export class SwapBuilder {
       : creatorPubkey;
     const treasuryTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
-      treasuryPubkey
+      treasuryPubkey,
+      false,
+      tokenProgram
     );
 
     // Staking pool - use creator for now, should be PDA
@@ -209,10 +249,12 @@ export class SwapBuilder {
       : creatorPubkey;
     const stakingPoolTokenAccount = await getAssociatedTokenAddress(
       tokenMint,
-      stakingPoolPubkey
+      stakingPoolPubkey,
+      false,
+      tokenProgram
     );
 
-    // Add transfer instructions for each split
+    // Add transfer instructions for each split (use detected token program)
     if (earnShare > 0n) {
       instructions.push(
         createTransferInstruction(
@@ -221,7 +263,7 @@ export class SwapBuilder {
           userPublicKey,
           earnShare,
           [],
-          TOKEN_PROGRAM_ID
+          tokenProgram
         )
       );
     }
@@ -234,7 +276,7 @@ export class SwapBuilder {
           userPublicKey,
           creatorShare,
           [],
-          TOKEN_PROGRAM_ID
+          tokenProgram
         )
       );
     }
@@ -247,7 +289,7 @@ export class SwapBuilder {
           userPublicKey,
           buybackShare,
           [],
-          TOKEN_PROGRAM_ID
+          tokenProgram
         )
       );
     }
@@ -260,7 +302,7 @@ export class SwapBuilder {
           userPublicKey,
           stakingShare,
           [],
-          TOKEN_PROGRAM_ID
+          tokenProgram
         )
       );
     }
