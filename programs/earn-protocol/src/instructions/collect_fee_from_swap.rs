@@ -12,15 +12,24 @@ use crate::errors::EarnError;
 /// taking a fee from the swap output before it reaches the user.
 pub fn collect_fee_from_swap(
     ctx: Context<CollectFeeFromSwap>,
-    swap_output_amount: u64,
+    expected_output: u64,
 ) -> Result<()> {
     let config = &ctx.accounts.token_config;
     
     require!(config.is_active, EarnError::TokenNotActive);
-    require!(swap_output_amount > 0, EarnError::InvalidAmount);
+    require!(expected_output > 0, EarnError::InvalidAmount);
+    
+    // SECURITY FIX: Use ACTUAL balance, not expected output
+    // This prevents DoS when slippage causes less output than quoted
+    let actual_balance = ctx.accounts.user_token_account.amount;
+    
+    // Use the minimum of expected and actual to prevent over-extraction
+    // If actual < expected (slippage), we take fee on what's actually there
+    // If actual > expected (positive slippage), we only take fee on expected amount
+    let fee_basis = std::cmp::min(expected_output, actual_balance);
     
     // Calculate total fee based on config
-    let total_fee = swap_output_amount
+    let total_fee = fee_basis
         .checked_mul(config.fee_basis_points as u64)
         .unwrap()
         .checked_div(10000)
@@ -135,7 +144,7 @@ pub fn collect_fee_from_swap(
     emit!(crate::events::FeeCollectedFromSwap {
         token_mint: ctx.accounts.token_mint.key(),
         user: ctx.accounts.user.key(),
-        swap_output_amount,
+        swap_output_amount: fee_basis,  // Actual amount fee was calculated on
         total_fee,
         protocol_amount,
         creator_amount,
@@ -144,8 +153,8 @@ pub fn collect_fee_from_swap(
         timestamp: Clock::get()?.unix_timestamp,
     });
     
-    msg!("Fee collected from swap: {} total (Protocol: {}, Creator: {}, Buyback: {}, Stakers: {})",
-        total_fee, protocol_amount, creator_amount, buyback_amount, staker_amount);
+    msg!("Fee collected from swap: {} total on {} basis (expected: {}, actual: {})",
+        total_fee, fee_basis, expected_output, actual_balance);
     
     Ok(())
 }
