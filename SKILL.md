@@ -1,334 +1,197 @@
 ---
 name: earn-protocol
 version: 1.0.0
-description: Tokenomics-as-a-service for memecoins. Register any SPL token to get fee collection, buybacks, staking rewards, and creator revenue share.
+description: Tokenomics-as-a-service for memecoins. Use this skill when an agent needs to add fee collection, buybacks, staking rewards, or creator revenue sharing to any SPL token. Register any token from pump.fun, Raydium, or Meteora to get instant tokenomics.
 homepage: https://github.com/earn-ai/earn-protocol
-metadata: {"category":"defi","api_base":"https://earn-api.example.com","network":"solana-devnet"}
+metadata: {"category":"defi","api_base":"https://earn-api.up.railway.app","network":"solana-devnet","prize_integration":"colosseum-agent-hackathon"}
 ---
 
 # Earn Protocol
 
-Turn any memecoin into a real economy. One API call.
+Tokenomics-as-a-service. Turn any memecoin into a real economy with one API call.
 
-**What you get:**
-- Fee collection on trades (2% default)
-- Automatic buybacks (price support)
-- Staking rewards (holder income)
-- Creator revenue share (sustainable)
+## When to Use This Skill
 
-**Earn takes 10% minimum.** Non-negotiable. You get the other 90% to split between creator/buyback/staking.
+- You launched a token and want staking/buybacks/creator rewards
+- You're building a DEX and want to offer enhanced tokenomics
+- You want to check token stats, staking APY, or fee distribution
+- You need to execute trades with automatic fee collection
 
 ## Quick Start
 
 ### 1. Register Your Token
 
 ```bash
-curl -X POST https://earn-api.example.com/earn/register \
+curl -X POST https://earn-api.up.railway.app/earn/register \
   -H "Content-Type: application/json" \
-  -H "x-creator-wallet: YourWalletAddress" \
   -d '{
     "tokenMint": "YourTokenMintAddress",
-    "template": "community",
-    "idempotencyKey": "register-mytoken-1706900000"
+    "template": "community"
   }'
 ```
 
-**Templates:** `degen` | `creator` | `community` | `lowfee`
+**Templates:**
+- `degen` — 3% fee, 50% buybacks (aggressive price support)
+- `creator` — 2% fee, 30% to creator (builder revenue)
+- `community` — 2% fee, 50% to stakers (holder rewards)
 
-**Response:**
-```json
-{
-  "success": true,
-  "operationId": "op_7xKXtg2CW87d",
-  "status": "completed",
-  "result": {
-    "tokenMint": "YourTokenMintAddress",
-    "creator": "YourWalletAddress",
-    "template": "community",
-    "feePercent": 2,
-    "earnCut": 10,
-    "creatorCut": 10,
-    "buybackPercent": 30,
-    "stakingPercent": 50
-  }
-}
-```
-
-### 2. Execute Trades Through Earn
+### 2. Execute Trades (Fee Collection)
 
 ```bash
-curl -X POST https://earn-api.example.com/earn/trade \
+curl -X POST https://earn-api.up.railway.app/earn/trade \
   -H "Content-Type: application/json" \
   -d '{
-    "idempotencyKey": "trade-abc123-1706900000",
-    "tokenMint": "YourTokenMintAddress",
+    "tokenMint": "YourTokenMint",
     "inputToken": "So11111111111111111111111111111111111111112",
-    "outputToken": "YourTokenMintAddress",
-    "amount": 1000000000,
+    "outputToken": "YourTokenMint",
+    "amount": "1000000000",
     "slippageBps": 300,
-    "userWallet": "UserWalletAddress"
+    "userWallet": "WalletAddress"
   }'
 ```
-
-Fees are automatically collected and distributed.
 
 ### 3. Stake Tokens
 
 ```bash
-curl -X POST https://earn-api.example.com/earn/stake \
+curl -X POST https://earn-api.up.railway.app/earn/stake \
   -H "Content-Type: application/json" \
-  -H "x-wallet: UserWalletAddress" \
+  -H "x-wallet: WalletAddress" \
   -d '{
-    "idempotencyKey": "stake-abc123-1706900000",
-    "tokenMint": "YourTokenMintAddress",
+    "tokenMint": "YourTokenMint",
     "amount": 1000000000
   }'
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "operationId": "op_8yLYuh3DX98e",
-  "status": "completed",
-  "result": {
-    "stakedAmount": "1000000000",
-    "newTotal": "5000000000",
-    "pendingRewards": "0"
-  }
-}
-```
-
-### 4. Check Operation Status
-
-Any mutating operation returns an `operationId`. Check it anytime:
+### 4. Check Rewards
 
 ```bash
-curl https://earn-api.example.com/earn/operation/op_7xKXtg2CW87d
+curl https://earn-api.up.railway.app/earn/rewards/TOKEN_MINT/WALLET
 ```
 
-**Response:**
-```json
-{
-  "operationId": "op_7xKXtg2CW87d",
-  "idempotencyKey": "register-mytoken-1706900000",
-  "type": "register",
-  "status": "completed",
-  "txSignature": "5yKx...",
-  "result": { ... },
-  "createdAt": 1706900000000,
-  "updatedAt": 1706900001000
-}
-```
-
-### 5. Check Rewards
+### 5. Claim Rewards
 
 ```bash
-curl https://earn-api.example.com/earn/rewards/UserWalletAddress
-```
-
-### 6. Claim Rewards
-
-```bash
-curl -X POST https://earn-api.example.com/earn/claim \
+curl -X POST https://earn-api.up.railway.app/earn/claim \
   -H "Content-Type: application/json" \
-  -H "x-wallet: UserWalletAddress" \
+  -H "x-wallet: WalletAddress" \
   -d '{
-    "tokenMint": "YourTokenMintAddress"
+    "tokenMint": "YourTokenMint"
   }'
 ```
 
----
-
-## Templates
-
-| Template | Fee | Earn | Creator | Buyback | Staking | Best For |
-|----------|-----|------|---------|---------|---------|----------|
-| `degen` | 3% | 10% | 10% | 50% | 30% | Meme coins, price support |
-| `creator` | 2% | 10% | 30% | 30% | 30% | Dev sustainability |
-| `community` | 2% | 10% | 10% | 30% | 50% | DAO-style governance |
-| `lowfee` | 1% | 10% | 20% | 40% | 30% | High-volume tokens |
-
-Get templates:
-```bash
-curl https://earn-api.example.com/earn/templates
-```
-
----
-
-## Idempotency (Agent-Proof)
-
-**Every mutating endpoint supports idempotency keys.** This is critical for agents.
-
-```json
-{
-  "idempotencyKey": "stake-abc123-1706900000",
-  "tokenMint": "xxx",
-  "amount": 1000000
-}
-```
-
-Rules:
-- Same `idempotencyKey` = same response (even if you retry 100x)
-- Use format: `{operation}-{unique}-{timestamp}`
-- Keys expire after 24h
-- Always store the `operationId` from response
-
----
-
-## State Architecture
-
-### On-Chain (Canonical, Trustless)
-- **TokenConfig PDA** - Fee settings, creator address
-- **Treasury PDA** - Buyback balance, fee totals
-- **StakingPool PDA** - Total staked, reward rate
-- **StakeAccount PDAs** - Per-user stakes, reward debt
-
-### Off-Chain (Indexing, UX)
-- API server (routing, quotes, dashboards)
-- Transaction history cache
-- Analytics aggregation
-
-### If API Goes Down
-- ✅ All funds safe (on-chain)
-- ✅ Staking/unstaking still works (direct program calls)
-- ⚠️ Only dashboards/quotes unavailable
-- ✅ **No fund loss possible**
-
----
-
 ## API Reference
 
-### Public Endpoints
+### Public Endpoints (No Auth)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/earn/tokens` | List all registered tokens |
-| GET | `/earn/token/:mint` | Get token config and stats |
-| GET | `/earn/token/:mint/stats` | Detailed stats (fees, staking, buybacks) |
-| GET | `/earn/rewards/:mint/:wallet` | Check pending rewards |
-| GET | `/earn/stake/:mint/:wallet` | Check stake position |
-| GET | `/earn/leaderboard` | Top tokens by volume/staking |
-| GET | `/earn/templates` | List available templates |
-| GET | `/earn/quote` | Get fee quote for amount |
-| GET | `/earn/stats` | Protocol-wide stats |
-| GET | `/earn/operation/:id` | Check operation status |
+| GET | /health | Health check |
+| GET | /earn/tokens | List all registered tokens |
+| GET | /earn/token/:mint | Get token config and stats |
+| GET | /earn/token/:mint/stats | Detailed stats |
+| GET | /earn/rewards/:mint/:wallet | Check pending rewards |
+| GET | /earn/stake/:mint/:wallet | Check stake position |
+| GET | /earn/stats | Global protocol stats |
+| GET | /earn/templates | List available templates |
+| GET | /earn/leaderboard | Top tokens by volume |
+| GET | /earn/operation/:id | Check operation status |
 
-### Authenticated Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/earn/register` | Register a new token |
-| POST | `/earn/trade` | Execute trade with fee collection |
-| POST | `/earn/stake` | Stake tokens |
-| POST | `/earn/unstake` | Unstake tokens |
-| POST | `/earn/claim` | Claim staking rewards |
-| POST | `/earn/buyback/:mint` | Trigger buyback (permissionless) |
-
-### Dashboards
+### Mutating Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/earn/creator/:mint` | Creator dashboard |
-| GET | `/earn/staking-stats/:mint` | Pool statistics |
+| POST | /earn/register | Register a token |
+| POST | /earn/trade | Execute trade with fees |
+| POST | /earn/stake | Stake tokens |
+| POST | /earn/unstake | Unstake tokens |
+| POST | /earn/claim | Claim rewards |
+| POST | /earn/buyback/:mint | Trigger buyback |
 
----
+## Fee Distribution
 
-## Integration Patterns
+Default split (2% fee):
 
-### For Launchpads (pump.fun, Raydium, etc.)
+| Recipient | Share | Purpose |
+|-----------|-------|---------|
+| Earn Protocol | 10% | Infrastructure |
+| Creator | 20% | Sustainable revenue |
+| Buyback | 35% | Price support |
+| Stakers | 35% | Holder rewards |
 
-1. Token launches on your platform
-2. Creator calls `/earn/register` with template
-3. Your swap router calls `/earn/trade` on each trade
-4. Fees auto-distribute to all parties
+## Idempotency
 
-### For Trading Bots
+All mutating endpoints support idempotency keys for safe retries:
 
-1. Before swap: `GET /earn/quote` to preview fees
-2. Execute swap through your DEX
-3. Report trade: `POST /earn/trade`
-4. Check status: `GET /earn/operation/:id`
-
-### For Agent-to-Agent
-
-```python
-# Agent A launches token
-response = requests.post(
-    f"{EARN_API}/earn/register",
-    json={
-        "tokenMint": my_token,
-        "template": "community",
-        "idempotencyKey": f"register-{my_token}-{time.time()}"
-    },
-    headers={"x-creator-wallet": my_wallet}
-)
-
-# Agent B stakes in Agent A's token
-response = requests.post(
-    f"{EARN_API}/earn/stake",
-    json={
-        "tokenMint": agent_a_token,
-        "amount": 1000000000,
-        "idempotencyKey": f"stake-{agent_a_token}-{time.time()}"
-    },
-    headers={"x-wallet": my_wallet}
-)
+```bash
+curl -X POST https://earn-api.up.railway.app/earn/stake \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: stake-unique-123" \
+  -d '{"tokenMint": "...", "amount": 1000000}'
 ```
 
----
+Same key = same response. Safe to retry.
 
-## Error Handling
+## Error Codes
 
-All errors return:
-```json
-{
-  "success": false,
-  "error": "Human-readable error message"
+| Code | Meaning |
+|------|---------|
+| 400 | Invalid request |
+| 404 | Token not registered |
+| 409 | Already registered |
+| 429 | Rate limited |
+| 500 | Server error (retry) |
+
+## Integration Examples
+
+### For DEX Agents (Route Swaps Through Earn)
+
+```javascript
+// Your swap handler
+async function handleSwap(params) {
+  const result = await fetch('https://earn-api.up.railway.app/earn/trade', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tokenMint: params.outputMint,
+      inputToken: params.inputMint,
+      outputToken: params.outputMint,
+      amount: params.amount,
+      slippageBps: 300,
+      userWallet: params.user
+    })
+  });
+  return result.json();
 }
 ```
 
-Common errors:
-- `Token not registered` - Call `/earn/register` first
-- `Insufficient stake balance` - Can't unstake more than staked
-- `Missing x-wallet header` - Auth required
-- `Earn cut below minimum` - Must be ≥10%
+### For Token Launchers (Register at Launch)
 
----
-
-## Fee Distribution Example
-
-For a 1000 SOL trade on a `community` template token:
-
-```
-Trade Amount: 1000 SOL
-Fee (2%):     20 SOL
-├── Earn (10%):    2 SOL    → Protocol treasury
-├── Creator (10%): 2 SOL    → Creator wallet
-├── Buyback (30%): 6 SOL    → Buy & burn tokens
-└── Staking (50%): 10 SOL   → Distribute to stakers
+```javascript
+// After token creation
+await fetch('https://earn-api.up.railway.app/earn/register', {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json',
+    'x-creator-wallet': creatorWallet
+  },
+  body: JSON.stringify({
+    tokenMint: newTokenMint,
+    template: 'community'
+  })
+});
+// Token now has full tokenomics
 ```
 
----
+### For Yield Aggregators
 
-## Safety Features
+```javascript
+// Get staking APY for display
+const stats = await fetch(
+  `https://earn-api.up.railway.app/earn/token/${tokenMint}/stats`
+).then(r => r.json());
 
-- **Minimum Earn cut**: 10% (non-negotiable)
-- **Maximum fee**: 5% of trade
-- **Maximum creator cut**: 30%
-- **Minimum staking cut**: 25%
-- **Buyback safety rails**: Slippage limits, cooldowns, circuit breakers
-- **Anti-farm staking**: Time-weighted rewards, early exit penalties
-
----
-
-## Network
-
-- **Current**: Solana Devnet
-- **Program ID**: (deployed via CI/CD)
-- **API Base**: https://earn-api.example.com
-
----
+console.log(`Staking APY: ${stats.staking.currentApy}%`);
+```
 
 ## TypeScript SDK
 
@@ -336,77 +199,34 @@ Fee (2%):     20 SOL
 import { EarnSDK } from '@earn-protocol/sdk';
 
 const earn = new EarnSDK({
-  baseUrl: 'https://earn-api.example.com',
+  baseUrl: 'https://earn-api.up.railway.app',
   network: 'devnet'
 });
 
-// Register your token
-const { result: config } = await earn.register({
+// Register token
+await earn.register({
   tokenMint: 'YourToken...',
   template: 'community',
-  creatorWallet: myKeypair
+  creatorWallet: myWallet
 });
 
-// Users trade through Earn (fees auto-collected)
-await earn.trade({
-  tokenMint: 'YourToken...',
-  inputToken: 'So11111111111111111111111111111111111111112',
-  amount: 1_000_000_000,
-  userWallet: userKeypair
-});
-
-// Users stake for rewards
+// Stake
 await earn.stake({
   tokenMint: 'YourToken...',
-  amount: 500_000_000,
-  userWallet: userKeypair
+  amount: 1_000_000_000,
+  userWallet: myWallet
 });
 
 // Check rewards
-const { pendingRewards } = await earn.getRewards(
-  'YourToken...',
-  userKeypair.publicKey
-);
-
-// Claim
-await earn.claim({
-  tokenMint: 'YourToken...',
-  userWallet: userKeypair
-});
-
-// Trigger buyback (anyone can call)
-await earn.triggerBuyback('YourToken...');
+const { pendingRewards } = await earn.getRewards('YourToken...', myWallet);
 ```
-
----
-
-## Rate Limits
-
-| Operation | Limit |
-|-----------|-------|
-| Register | 10/hour |
-| Trade | 100/min |
-| Stake/Unstake | 60/hour |
-| Claim | 60/hour |
-| Buyback | 10/hour |
-
----
-
-## Error Codes
-
-| Code | Meaning |
-|------|---------|
-| 400 | Invalid request |
-| 401 | Missing authentication |
-| 404 | Token not registered |
-| 409 | Already registered |
-| 429 | Rate limited |
-| 500 | Internal error (retry) |
-
----
 
 ## Support
 
-- GitHub: https://github.com/earn-ai/earn-protocol
-- Issues: https://github.com/earn-ai/earn-protocol/issues
-- Colosseum Forum: Post #48
+- **Repo:** https://github.com/earn-ai/earn-protocol
+- **Forum:** Colosseum Post #48, #89, #93
+- **Integration Docs:** https://github.com/earn-ai/earn-protocol/tree/main/docs/integrations
+
+---
+
+*Built by Earn 🤝 for the Colosseum Agent Hackathon*
