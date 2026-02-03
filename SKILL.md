@@ -199,39 +199,38 @@ Rules:
 
 ## API Reference
 
-### Token Management
+### Public Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/earn/register` | POST | Register token with template |
-| `/earn/token/:mint` | GET | Get token config & stats |
-| `/earn/tokens` | GET | List all registered tokens |
-| `/earn/templates` | GET | List available templates |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/earn/tokens` | List all registered tokens |
+| GET | `/earn/token/:mint` | Get token config and stats |
+| GET | `/earn/token/:mint/stats` | Detailed stats (fees, staking, buybacks) |
+| GET | `/earn/rewards/:mint/:wallet` | Check pending rewards |
+| GET | `/earn/stake/:mint/:wallet` | Check stake position |
+| GET | `/earn/leaderboard` | Top tokens by volume/staking |
+| GET | `/earn/templates` | List available templates |
+| GET | `/earn/quote` | Get fee quote for amount |
+| GET | `/earn/stats` | Protocol-wide stats |
+| GET | `/earn/operation/:id` | Check operation status |
 
-### Trading & Fees
+### Authenticated Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/earn/trade` | POST | Process trade, collect fees |
-| `/earn/quote` | GET | Get fee quote for amount |
-
-### Staking
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/earn/stake` | POST | Stake tokens |
-| `/earn/unstake` | POST | Unstake tokens |
-| `/earn/claim` | POST | Claim pending rewards |
-| `/earn/rewards/:wallet` | GET | Get pending rewards |
-| `/earn/staking-stats/:mint` | GET | Pool statistics |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/earn/register` | Register a new token |
+| POST | `/earn/trade` | Execute trade with fee collection |
+| POST | `/earn/stake` | Stake tokens |
+| POST | `/earn/unstake` | Unstake tokens |
+| POST | `/earn/claim` | Claim staking rewards |
+| POST | `/earn/buyback/:mint` | Trigger buyback (permissionless) |
 
 ### Dashboards
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/earn/creator/:mint` | GET | Creator dashboard |
-| `/earn/stats` | GET | Protocol-wide stats |
-| `/earn/operation/:id` | GET | Check operation status |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/earn/creator/:mint` | Creator dashboard |
+| GET | `/earn/staking-stats/:mint` | Pool statistics |
 
 ---
 
@@ -331,7 +330,83 @@ Fee (2%):     20 SOL
 
 ---
 
+## TypeScript SDK
+
+```typescript
+import { EarnSDK } from '@earn-protocol/sdk';
+
+const earn = new EarnSDK({
+  baseUrl: 'https://earn-api.example.com',
+  network: 'devnet'
+});
+
+// Register your token
+const { result: config } = await earn.register({
+  tokenMint: 'YourToken...',
+  template: 'community',
+  creatorWallet: myKeypair
+});
+
+// Users trade through Earn (fees auto-collected)
+await earn.trade({
+  tokenMint: 'YourToken...',
+  inputToken: 'So11111111111111111111111111111111111111112',
+  amount: 1_000_000_000,
+  userWallet: userKeypair
+});
+
+// Users stake for rewards
+await earn.stake({
+  tokenMint: 'YourToken...',
+  amount: 500_000_000,
+  userWallet: userKeypair
+});
+
+// Check rewards
+const { pendingRewards } = await earn.getRewards(
+  'YourToken...',
+  userKeypair.publicKey
+);
+
+// Claim
+await earn.claim({
+  tokenMint: 'YourToken...',
+  userWallet: userKeypair
+});
+
+// Trigger buyback (anyone can call)
+await earn.triggerBuyback('YourToken...');
+```
+
+---
+
+## Rate Limits
+
+| Operation | Limit |
+|-----------|-------|
+| Register | 10/hour |
+| Trade | 100/min |
+| Stake/Unstake | 60/hour |
+| Claim | 60/hour |
+| Buyback | 10/hour |
+
+---
+
+## Error Codes
+
+| Code | Meaning |
+|------|---------|
+| 400 | Invalid request |
+| 401 | Missing authentication |
+| 404 | Token not registered |
+| 409 | Already registered |
+| 429 | Rate limited |
+| 500 | Internal error (retry) |
+
+---
+
 ## Support
 
 - GitHub: https://github.com/earn-ai/earn-protocol
 - Issues: https://github.com/earn-ai/earn-protocol/issues
+- Colosseum Forum: Post #48

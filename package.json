@@ -1,18 +1,34 @@
 {
-  "name": "earn-protocol",
+  "name": "@earn-protocol/sdk",
   "version": "0.1.0",
-  "description": "Tokenomics-as-a-service for memecoins",
+  "description": "Tokenomics-as-a-service for memecoins - SDK & API server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./sdk": {
+      "import": "./dist/sdk.js",
+      "require": "./dist/sdk.js",
+      "types": "./dist/sdk.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "jest",
     "start": "node dist/index.js"
   },
-  "keywords": ["solana", "tokenomics", "memecoin", "staking", "defi"],
+  "keywords": ["solana", "tokenomics", "memecoin", "staking", "defi", "sdk"],
   "author": "Earn Protocol",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/earn-ai/earn-protocol"
+  },
   "dependencies": {
     "@solana/web3.js": "^1.87.6",
     "@solana/spl-token": "^0.3.9",

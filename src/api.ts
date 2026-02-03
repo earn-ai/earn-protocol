@@ -165,6 +165,220 @@ function getTemplateDescription(name: string): string {
   return descriptions[name] || 'Custom template';
 }
 
+// Helper to get idempotency key from header or body
+function getIdempotencyKey(req: Request): string | undefined {
+  return (req.headers['idempotency-key'] as string) || req.body?.idempotencyKey;
+}
+
+// ============================================
+// ADDITIONAL PUBLIC ENDPOINTS
+// ============================================
+
+/**
+ * GET /earn/token/:mint/stats
+ * Detailed stats for a token (fees, staking, buybacks)
+ */
+app.get('/earn/token/:mint/stats', (req, res) => {
+  try {
+    const config = protocol.getTokenConfig(req.params.mint);
+    const treasury = protocol.getTreasury(req.params.mint);
+    const stakingPool = protocol.getStakingPool(req.params.mint);
+
+    if (!config || !treasury || !stakingPool) {
+      return res.status(404).json({ error: 'Token not registered' });
+    }
+
+    res.json({
+      tokenMint: req.params.mint,
+      fees: {
+        totalCollected: treasury.totalFeesCollected.toString(),
+        earnEarnings: treasury.totalEarnEarnings.toString(),
+        creatorEarnings: treasury.totalCreatorEarnings.toString(),
+      },
+      buybacks: {
+        totalExecuted: treasury.totalBuybacks.toString(),
+        treasuryBalance: treasury.treasuryBalance.toString(),
+      },
+      staking: {
+        totalStaked: stakingPool.totalStaked.toString(),
+        totalRewardsDistributed: stakingPool.totalRewardsDistributed.toString(),
+        stakerCount: stakingPool.stakerCount,
+        rewardRate: stakingPool.rewardsPerTokenStored.toString(),
+      },
+      config: {
+        feePercent: config.feePercent,
+        earnCut: config.earnCut,
+        creatorCut: config.creatorCut,
+        buybackPercent: config.buybackPercent,
+        stakingPercent: config.stakingPercent,
+      },
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /earn/stake/:mint/:wallet
+ * Check stake position for a wallet
+ */
+app.get('/earn/stake/:mint/:wallet', (req, res) => {
+  try {
+    const wallet = new PublicKey(req.params.wallet);
+    const position = protocol.getStakingPosition(req.params.mint, wallet);
+    const pendingRewards = protocol.calculatePendingRewards(req.params.mint, wallet);
+
+    if (!position) {
+      return res.json({
+        tokenMint: req.params.mint,
+        wallet: req.params.wallet,
+        stakedAmount: '0',
+        stakedAt: null,
+        pendingRewards: '0',
+      });
+    }
+
+    res.json({
+      tokenMint: req.params.mint,
+      wallet: req.params.wallet,
+      stakedAmount: position.stakedAmount.toString(),
+      stakedAt: position.stakedAt,
+      lastClaimAt: position.lastClaimAt,
+      pendingRewards: pendingRewards.toString(),
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /earn/rewards/:mint/:wallet
+ * Check pending rewards for a specific token
+ */
+app.get('/earn/rewards/:mint/:wallet', (req, res) => {
+  try {
+    const wallet = new PublicKey(req.params.wallet);
+    const pending = protocol.calculatePendingRewards(req.params.mint, wallet);
+    const position = protocol.getStakingPosition(req.params.mint, wallet);
+
+    res.json({
+      tokenMint: req.params.mint,
+      wallet: req.params.wallet,
+      stakedAmount: position?.stakedAmount.toString() || '0',
+      pendingRewards: pending.toString(),
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /earn/leaderboard
+ * Top tokens by volume, staking, or fees
+ */
+app.get('/earn/leaderboard', (req, res) => {
+  try {
+    const sortBy = (req.query.sort as string) || 'fees';
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+
+    const tokens = protocol.getAllTokens();
+    const tokenStats = tokens.map(t => {
+      const treasury = protocol.getTreasury(t.tokenMint.toBase58());
+      const stakingPool = protocol.getStakingPool(t.tokenMint.toBase58());
+      return {
+        tokenMint: t.tokenMint.toBase58(),
+        creator: t.creator.toBase58(),
+        totalFees: treasury?.totalFeesCollected || BigInt(0),
+        totalStaked: stakingPool?.totalStaked || BigInt(0),
+        stakerCount: stakingPool?.stakerCount || 0,
+        registeredAt: t.registeredAt,
+      };
+    });
+
+    // Sort by selected metric
+    tokenStats.sort((a, b) => {
+      if (sortBy === 'staked') {
+        return Number(b.totalStaked - a.totalStaked);
+      } else if (sortBy === 'stakers') {
+        return b.stakerCount - a.stakerCount;
+      } else {
+        return Number(b.totalFees - a.totalFees);
+      }
+    });
+
+    res.json({
+      leaderboard: tokenStats.slice(0, limit).map((t, i) => ({
+        rank: i + 1,
+        tokenMint: t.tokenMint,
+        creator: t.creator,
+        totalFees: t.totalFees.toString(),
+        totalStaked: t.totalStaked.toString(),
+        stakerCount: t.stakerCount,
+      })),
+      sortBy,
+      total: tokens.length,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /earn/buyback/:mint
+ * Trigger a buyback (permissionless - anyone can call)
+ */
+app.post('/earn/buyback/:mint', async (req: Request, res: Response) => {
+  try {
+    const idempotencyKey = getIdempotencyKey(req);
+    const { operation, isNew } = getOrCreateOperation(
+      idempotencyKey,
+      'buyback',
+      { tokenMint: req.params.mint }
+    );
+
+    if (!isNew && operation.status === 'completed') {
+      return res.json({
+        success: true,
+        operationId: operation.operationId,
+        status: operation.status,
+        txSignature: operation.txSignature,
+        result: operation.result,
+      });
+    }
+
+    const treasury = protocol.getTreasury(req.params.mint);
+    if (!treasury) {
+      return res.status(404).json({ error: 'Token not registered' });
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
+
+    // In production, this would execute via Jupiter CPI
+    // For now, simulate buyback
+    const buybackAmount = treasury.treasuryBalance / BigInt(10); // 10% of treasury
+    
+    const result = {
+      tokenMint: req.params.mint,
+      buybackAmount: buybackAmount.toString(),
+      message: 'Buyback queued (simulation)',
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result,
+    });
+
+    res.json({
+      success: true,
+      operationId: operation.operationId,
+      status: 'completed',
+      result,
+    });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // ============================================
 // TOKEN REGISTRATION
 // ============================================
@@ -188,9 +402,9 @@ app.post('/earn/register', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Missing x-creator-wallet header' });
     }
 
-    // Check idempotency
+    // Check idempotency (header or body)
     const { operation, isNew } = getOrCreateOperation(
-      body.idempotencyKey,
+      getIdempotencyKey(req),
       'register',
       body as Record<string, unknown>
     );
@@ -351,9 +565,9 @@ app.post('/earn/trade', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing tokenMint or amount' });
     }
 
-    // Check idempotency
+    // Check idempotency (header or body)
     const { operation, isNew } = getOrCreateOperation(
-      idempotencyKey,
+      getIdempotencyKey(req),
       'trade',
       { tokenMint, amount, isBuy, inputToken, outputToken, slippageBps, userWallet }
     );
@@ -452,9 +666,9 @@ app.post('/earn/stake', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing tokenMint, amount, or x-wallet header' });
     }
 
-    // Check idempotency
+    // Check idempotency (header or body)
     const { operation, isNew } = getOrCreateOperation(
-      idempotencyKey,
+      getIdempotencyKey(req),
       'stake',
       { tokenMint, amount, wallet: walletAddress }
     );
@@ -512,9 +726,9 @@ app.post('/earn/unstake', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing tokenMint, amount, or x-wallet header' });
     }
 
-    // Check idempotency
+    // Check idempotency (header or body)
     const { operation, isNew } = getOrCreateOperation(
-      idempotencyKey,
+      getIdempotencyKey(req),
       'unstake',
       { tokenMint, amount, wallet: walletAddress }
     );
