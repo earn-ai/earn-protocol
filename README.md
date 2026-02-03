@@ -63,16 +63,45 @@ Trade happens → 2% fee collected
 └─────────────────────┘
 ```
 
+## 🔥 NEW: Atomic Swaps with Fee Collection
+
+Trade through Jupiter with automatic fee collection in ONE atomic transaction:
+
+```bash
+# Get a swap quote with fee preview
+curl "https://earn-protocol.onrender.com/earn/swap/quote?tokenMint=TOKEN&inputMint=SOL&outputMint=TOKEN&amount=1000000000"
+
+# Build swap transaction
+curl -X POST https://earn-protocol.onrender.com/earn/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tokenMint": "YOUR_TOKEN_MINT",
+    "inputMint": "So11111111111111111111111111111111111111112",
+    "outputMint": "YOUR_TOKEN_MINT", 
+    "amount": 1000000000,
+    "userPublicKey": "YOUR_WALLET",
+    "slippageBps": 100
+  }'
+```
+
+Returns an unsigned transaction. User signs and submits. Swap + fees collected atomically.
+
+**Why this matters:**
+- Works with ANY existing token (no token modification needed)
+- Fees collected in same TX as swap (atomic, no front-running)
+- User custody - we never hold funds
+- Jupiter liquidity - best rates across all Solana DEXs
+
 ## API Endpoints
+
+### 🆕 Swap with Fees (Jupiter)
+- `POST /earn/swap` - Build atomic swap+fee transaction
+- `GET /earn/swap/quote` - Get quote with fee preview
 
 ### Token Registration
 - `POST /earn/register` - Register a new token
 - `GET /earn/token/:mint` - Get token config and stats
 - `GET /earn/tokens` - List all registered tokens
-
-### Fee Collection
-- `POST /earn/trade` - Process trade and collect fees
-- `GET /earn/quote` - Get fee quote for a trade
 
 ### Staking
 - `POST /earn/stake` - Stake tokens
