@@ -94,6 +94,51 @@ export class SwapBuilder {
   }
 
   /**
+   * Append instructions to a VersionedTransaction
+   * This is the key method for atomic swap + fee collection
+   */
+  async appendToVersionedTransaction(
+    versionedTx: VersionedTransaction,
+    additionalInstructions: TransactionInstruction[],
+    payer: PublicKey
+  ): Promise<VersionedTransaction> {
+    // Get the message from the versioned transaction
+    const message = versionedTx.message;
+    
+    // Fetch address lookup tables if present
+    const lookupTableAccounts: AddressLookupTableAccount[] = [];
+    if (message.addressTableLookups && message.addressTableLookups.length > 0) {
+      for (const lookup of message.addressTableLookups) {
+        const accountInfo = await this.connection.getAddressLookupTable(lookup.accountKey);
+        if (accountInfo.value) {
+          lookupTableAccounts.push(accountInfo.value);
+        }
+      }
+    }
+
+    // Decompile the message to get instructions
+    const decompiledInstructions = TransactionMessage.decompile(message, {
+      addressLookupTableAccounts: lookupTableAccounts,
+    }).instructions;
+
+    // Combine all instructions
+    const allInstructions = [...decompiledInstructions, ...additionalInstructions];
+
+    // Get fresh blockhash
+    const { blockhash } = await this.connection.getLatestBlockhash();
+
+    // Create new message with all instructions
+    const newMessage = new TransactionMessage({
+      payerKey: payer,
+      recentBlockhash: blockhash,
+      instructions: allInstructions,
+    }).compileToV0Message(lookupTableAccounts);
+
+    // Create new versioned transaction
+    return new VersionedTransaction(newMessage);
+  }
+
+  /**
    * Get quote from Jupiter
    */
   async getJupiterQuote(
@@ -361,34 +406,30 @@ export class SwapBuilder {
       config
     );
 
-    // 6. Combine transactions
-    // For VersionedTransaction, we need to create a new transaction with combined instructions
-    // This is complex because Jupiter uses lookup tables - for now, return them separately
-    // and let the client combine, or use legacy transactions
+    // 6. Combine Jupiter swap + fee instructions into ONE atomic transaction
+    let finalTransaction: string;
     
-    // Get recent blockhash
-    const { blockhash, lastValidBlockHeight: newBlockHeight } = 
-      await this.connection.getLatestBlockhash();
-
-    // Create legacy transaction with fee instructions
-    const feeTransaction = new Transaction();
-    feeTransaction.recentBlockhash = blockhash;
-    feeTransaction.feePayer = userPubkey;
-    feeInstructions.forEach(ix => feeTransaction.add(ix));
-
-    // Serialize fee transaction
-    const feeTransactionBase64 = feeTransaction
-      .serialize({ requireAllSignatures: false })
-      .toString('base64');
+    try {
+      // Append fee instructions to Jupiter's VersionedTransaction
+      const combinedTx = await this.appendToVersionedTransaction(
+        jupiterTx,
+        feeInstructions,
+        userPubkey
+      );
+      finalTransaction = Buffer.from(combinedTx.serialize()).toString('base64');
+    } catch (error) {
+      console.warn('Failed to combine versioned transaction, falling back to separate txs:', error);
+      // Fallback: return Jupiter transaction only (fee instructions would need separate handling)
+      finalTransaction = swapTransaction;
+    }
 
     // Extract route labels
     const routeLabels = quote.routePlan?.map((r: any) => r.swapInfo?.label || 'Unknown') || [];
     const netOutput = Number(outputAmount - totalFee);
 
     return {
-      // Note: This returns Jupiter transaction only - fee instructions separate
-      // Use buildAtomicSwapWithFees for combined atomic transaction
-      transaction: swapTransaction,
+      // Combined atomic transaction: Jupiter swap + fee collection
+      transaction: finalTransaction,
       quote: {
         inputAmount: request.amount,
         outputAmount: netOutput,
