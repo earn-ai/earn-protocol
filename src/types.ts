@@ -316,3 +316,61 @@ export interface ApiResponse<T = unknown> {
   result?: T;
   error?: string;
 }
+
+// ============================================
+// ONE-CLICK ONBOARDING
+// ============================================
+
+/**
+ * Intent types for automatic template selection
+ */
+export type OnboardIntent = 'community' | 'creator' | 'degen' | 'auto';
+
+/**
+ * One-click onboarding request
+ * Agent says "make my token legit" → done
+ */
+export interface OnboardRequest extends IdempotentRequest {
+  tokenMint: string;
+  creatorWallet?: string;  // Optional - defaults to Earn wallet
+  intent: OnboardIntent;   // Which template strategy to use
+}
+
+/**
+ * Token verification result
+ */
+export interface TokenVerification {
+  exists: boolean;
+  mint: string;
+  decimals?: number;
+  supply?: string;
+  mintAuthority?: string | null;
+  freezeAuthority?: string | null;
+  holderCount?: number;
+  topHolderConcentration?: number;  // % held by top 10 holders
+}
+
+/**
+ * Onboarding response - everything an agent needs
+ */
+export interface OnboardResponse {
+  status: 'live' | 'pending' | 'failed';
+  tokenMint: string;
+  template: TemplateName;
+  stakingPool: string;           // PDA address
+  dashboardUrl: string;          // earn.supply/token/ABC123
+  nextSteps: {
+    staking: string;             // "Users can stake at earn.supply/stake/ABC123"
+    fees: string;                // "Automatic 2% on all swaps via Jupiter"
+    rewards: string;             // "Staking rewards funded from fee pool"
+    share: string;               // Twitter/social share link
+  };
+  config: {
+    feePercent: number;
+    earnCut: number;
+    creatorCut: number;
+    buybackPercent: number;
+    stakingPercent: number;
+  };
+  verification: TokenVerification;
+}

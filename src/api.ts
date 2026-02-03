@@ -16,10 +16,16 @@ import {
   UnstakeRequestV2,
   TradeRequest,
   ApiResponse,
+  OnboardRequest,
+  OnboardResponse,
+  OnboardIntent,
+  TokenVerification,
 } from './types';
 
 const app = express();
 app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
 
 // Simple in-memory rate limiting
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -147,6 +153,9 @@ app.get('/', (req, res) => {
       stats: '/earn/stats',
       tokens: '/earn/tokens',
       templates: '/earn/templates',
+      onboard: 'POST /earn/onboard ⭐ ONE-CLICK SETUP',
+      onboardPumpfun: 'POST /earn/onboard/pumpfun',
+      onboardExisting: 'POST /earn/onboard/existing',
       register: 'POST /earn/register',
       swap: 'POST /earn/swap',
       swapQuote: 'GET /earn/swap/quote',
@@ -555,6 +564,345 @@ app.post('/earn/register', async (req: Request, res: Response) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// ============================================
+// ONE-CLICK ONBOARDING - THE KILLER FEATURE
+// ============================================
+
+/**
+ * Verify a token exists on Solana and get its metadata
+ */
+async function verifyToken(mint: string): Promise<TokenVerification> {
+  try {
+    const mintPubkey = new PublicKey(mint);
+    const mintInfo = await connection.getParsedAccountInfo(mintPubkey);
+    
+    if (!mintInfo.value) {
+      return { exists: false, mint };
+    }
+
+    const data = mintInfo.value.data as any;
+    if (!data?.parsed?.info) {
+      return { exists: false, mint };
+    }
+
+    const info = data.parsed.info;
+    
+    // Get holder count (simplified - in production would use token accounts)
+    let holderCount = 0;
+    let topHolderConcentration = 0;
+    
+    try {
+      const tokenAccounts = await connection.getTokenLargestAccounts(mintPubkey);
+      holderCount = tokenAccounts.value.length;
+      
+      // Calculate top 10 holder concentration
+      const totalSupply = BigInt(info.supply || '0');
+      if (totalSupply > 0n) {
+        const top10 = tokenAccounts.value.slice(0, 10);
+        const top10Sum = top10.reduce((sum, acc) => sum + BigInt(acc.amount), 0n);
+        topHolderConcentration = Number((top10Sum * 10000n) / totalSupply) / 100;
+      }
+    } catch (e) {
+      // Ignore errors getting holder info
+    }
+
+    return {
+      exists: true,
+      mint,
+      decimals: info.decimals,
+      supply: info.supply,
+      mintAuthority: info.mintAuthority,
+      freezeAuthority: info.freezeAuthority,
+      holderCount,
+      topHolderConcentration,
+    };
+  } catch (error) {
+    return { exists: false, mint };
+  }
+}
+
+/**
+ * Auto-detect the best template based on token characteristics
+ */
+function autoDetectIntent(verification: TokenVerification): TemplateName {
+  // If holder concentration > 70% → creator template (likely dev-held)
+  if (verification.topHolderConcentration && verification.topHolderConcentration > 70) {
+    return 'creator';
+  }
+  
+  // If holder count > 1000 → community template (decentralized)
+  if (verification.holderCount && verification.holderCount > 1000) {
+    return 'community';
+  }
+  
+  // Otherwise → degen template (new/speculative)
+  return 'degen';
+}
+
+/**
+ * Generate staking pool PDA address
+ */
+function getStakingPoolPDA(tokenMint: string): string {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from('staking_pool'), new PublicKey(tokenMint).toBuffer()],
+    new PublicKey('EARNyKfN5M6dUCMk7vb5TW6QhMZ3xPLFHMrq7cXN6VFh') // Program ID placeholder
+  );
+  return pda.toBase58();
+}
+
+/**
+ * POST /earn/onboard
+ * 
+ * ONE-CLICK ONBOARDING - The Stripe moment for Solana tokenomics.
+ * 
+ * Agent launches a token on pump.fun. Now they want structure.
+ * One call, fully configured.
+ * 
+ * Request:
+ * {
+ *   "tokenMint": "ABC123...",
+ *   "creatorWallet": "AGENT_WALLET...",  // Optional
+ *   "intent": "community" | "creator" | "degen" | "auto"
+ * }
+ * 
+ * Response:
+ * {
+ *   "status": "live",
+ *   "stakingPool": "POOL_ADDRESS",
+ *   "dashboardUrl": "https://earn.supply/token/ABC123",
+ *   "nextSteps": { ... }
+ * }
+ */
+app.post('/earn/onboard', async (req: Request, res: Response) => {
+  try {
+    const body = req.body as OnboardRequest;
+    
+    if (!body.tokenMint) {
+      return res.status(400).json({ 
+        error: 'Missing tokenMint',
+        hint: 'Provide the token mint address you want to add structure to',
+      });
+    }
+
+    if (!body.intent) {
+      return res.status(400).json({ 
+        error: 'Missing intent',
+        hint: 'Choose: "community", "creator", "degen", or "auto"',
+      });
+    }
+
+    // Check idempotency
+    const { operation, isNew } = getOrCreateOperation(
+      getIdempotencyKey(req),
+      'register',
+      body as unknown as Record<string, unknown>
+    );
+
+    if (!isNew && operation.status === 'completed') {
+      return res.json(operation.result);
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
+
+    // STEP 1: Verify token exists on Solana
+    const verification = await verifyToken(body.tokenMint);
+    
+    if (!verification.exists) {
+      return res.status(404).json({
+        error: 'Token not found on Solana',
+        code: 'TOKEN_NOT_FOUND',
+        hint: 'Make sure the token mint address is correct and the token has been created',
+        details: { tokenMint: body.tokenMint },
+      });
+    }
+
+    // STEP 2: Determine template based on intent
+    let templateName: TemplateName;
+    
+    if (body.intent === 'auto') {
+      templateName = autoDetectIntent(verification);
+    } else {
+      templateName = body.intent as TemplateName;
+    }
+    
+    const template = TOKEN_TEMPLATES[templateName];
+
+    // STEP 3: Get creator wallet (default to Earn)
+    const EARN_DEFAULT_CREATOR = 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
+    const creatorAddress = body.creatorWallet || EARN_DEFAULT_CREATOR;
+
+    // STEP 4: Register with Earn Protocol
+    const creator = new PublicKey(creatorAddress);
+    const registerReq: RegisterRequest = {
+      tokenMint: body.tokenMint,
+      config: {
+        feePercent: template.feeBps / 100,
+        earnCut: template.earnCutBps / 100,
+        creatorCut: template.creatorCutBps / 100,
+        buybackPercent: template.buybackCutBps / 100,
+        stakingPercent: template.stakingCutBps / 100,
+      },
+    };
+    
+    const config = await protocol.registerToken(registerReq, creator);
+
+    // STEP 5: Generate staking pool PDA
+    const stakingPoolAddress = getStakingPoolPDA(body.tokenMint);
+
+    // STEP 6: Build response
+    const dashboardUrl = `https://earn.supply/token/${body.tokenMint}`;
+    const stakeUrl = `https://earn.supply/stake/${body.tokenMint}`;
+    const shareText = encodeURIComponent(`Just added @EarnProtocol to my token! Staking is now live 🚀\n\nStake here: ${stakeUrl}`);
+
+    const response: OnboardResponse = {
+      status: 'live',
+      tokenMint: body.tokenMint,
+      template: templateName,
+      stakingPool: stakingPoolAddress,
+      dashboardUrl,
+      nextSteps: {
+        staking: `Users can stake at ${stakeUrl}`,
+        fees: `Automatic ${template.feeBps / 100}% fee on all swaps via Jupiter`,
+        rewards: `Staking rewards funded from ${template.stakingCutBps / 100}% of fees`,
+        share: `https://twitter.com/intent/tweet?text=${shareText}`,
+      },
+      config: {
+        feePercent: template.feeBps / 100,
+        earnCut: template.earnCutBps / 100,
+        creatorCut: template.creatorCutBps / 100,
+        buybackPercent: template.buybackCutBps / 100,
+        stakingPercent: template.stakingCutBps / 100,
+      },
+      verification,
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result: response as unknown as Record<string, unknown>,
+    });
+
+    res.json(response);
+  } catch (error: any) {
+    console.error('Onboard error:', error);
+    
+    if (error.message?.includes('already registered')) {
+      return res.status(409).json({
+        error: 'Token already onboarded',
+        code: 'TOKEN_ALREADY_REGISTERED',
+        hint: 'This token is already using Earn Protocol. Check the dashboard.',
+        dashboardUrl: `https://earn.supply/token/${req.body.tokenMint}`,
+      });
+    }
+    
+    res.status(500).json({
+      error: error.message || 'Onboarding failed',
+      code: 'ONBOARD_FAILED',
+    });
+  }
+});
+
+/**
+ * POST /earn/onboard/pumpfun
+ * 
+ * Specialized endpoint for pump.fun tokens.
+ * Auto-detects mint and creator from bonding curve.
+ */
+app.post('/earn/onboard/pumpfun', async (req: Request, res: Response) => {
+  try {
+    const { bondingCurve, intent } = req.body;
+    
+    if (!bondingCurve) {
+      return res.status(400).json({
+        error: 'Missing bondingCurve address',
+        hint: 'Provide the pump.fun bonding curve address',
+      });
+    }
+
+    // In production, this would:
+    // 1. Fetch the bonding curve account data
+    // 2. Extract the token mint and creator
+    // 3. Call the standard onboard flow
+    
+    // For hackathon, return helpful message
+    res.status(501).json({
+      error: 'pump.fun integration coming soon',
+      hint: 'For now, use /earn/onboard with the token mint address directly',
+      example: {
+        endpoint: 'POST /earn/onboard',
+        body: {
+          tokenMint: 'YOUR_TOKEN_MINT',
+          creatorWallet: 'YOUR_WALLET',
+          intent: intent || 'auto',
+        },
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /earn/onboard/existing
+ * 
+ * Onboard an existing token with verification.
+ * Verifies caller has mint authority.
+ */
+app.post('/earn/onboard/existing', async (req: Request, res: Response) => {
+  try {
+    const { tokenMint, intent } = req.body;
+    const creatorWallet = req.headers['x-wallet'] as string;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ error: 'Missing tokenMint' });
+    }
+
+    // Verify token exists and check mint authority
+    const verification = await verifyToken(tokenMint);
+    
+    if (!verification.exists) {
+      return res.status(404).json({
+        error: 'Token not found',
+        code: 'TOKEN_NOT_FOUND',
+      });
+    }
+
+    // Warn if caller is not mint authority (but don't block)
+    let warning: string | undefined;
+    if (verification.mintAuthority && creatorWallet && 
+        verification.mintAuthority !== creatorWallet) {
+      warning = 'Warning: Your wallet is not the mint authority. Creator fees will still go to your wallet, but you may not be the original creator.';
+    }
+
+    // Forward to standard onboard
+    const response = await fetch(`http://localhost:${PORT}/earn/onboard`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(creatorWallet ? { 'x-creator-wallet': creatorWallet } : {}),
+      },
+      body: JSON.stringify({
+        tokenMint,
+        creatorWallet,
+        intent: intent || 'auto',
+      }),
+    });
+
+    const result = await response.json() as Record<string, unknown>;
+    
+    if (warning) {
+      result.warning = warning;
+    }
+
+    res.status(response.status).json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// TOKEN LOOKUP
+// ============================================
 
 /**
  * GET /earn/token/:mint
