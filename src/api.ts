@@ -139,7 +139,7 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Earn Protocol',
     description: 'Tokenomics-as-a-service for memecoins',
-    version: '0.2.0',
+    version: '0.3.0',
     docs: 'https://github.com/earn-ai/earn-protocol',
     website: 'https://earn.supply',
     endpoints: {
@@ -159,7 +159,7 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', protocol: 'Earn Protocol v0.1.0' });
+  res.json({ status: 'ok', protocol: 'Earn Protocol v0.3.0' });
 });
 
 // ============================================
