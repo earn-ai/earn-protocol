@@ -1,13 +1,87 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { PublicKey } from '@solana/web3.js';
+import crypto from 'crypto';
 import { EarnProtocol } from './protocol';
-import { RegisterRequest, StakeRequest, UnstakeRequest } from './types';
+import { 
+  RegisterRequest, 
+  StakeRequest, 
+  UnstakeRequest,
+  OperationRecord,
+  OperationStatus,
+  TOKEN_TEMPLATES,
+  TemplateName,
+  RegisterWithTemplateRequest,
+  StakeRequestV2,
+  UnstakeRequestV2,
+  TradeRequest,
+  ApiResponse,
+} from './types';
 
 const app = express();
 app.use(express.json());
 
 // Initialize protocol
 const protocol = new EarnProtocol(process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com');
+
+// ============================================
+// IDEMPOTENCY STORE
+// ============================================
+
+// In-memory store (would be Redis/DB in production)
+const operationStore = new Map<string, OperationRecord>();
+const idempotencyIndex = new Map<string, string>(); // idempotencyKey -> operationId
+
+function generateOperationId(): string {
+  return `op_${crypto.randomBytes(12).toString('base64url')}`;
+}
+
+function getOrCreateOperation(
+  idempotencyKey: string | undefined,
+  type: OperationRecord['type'],
+  request: Record<string, unknown>
+): { operation: OperationRecord; isNew: boolean } {
+  // If idempotencyKey provided, check for existing operation
+  if (idempotencyKey) {
+    const existingOpId = idempotencyIndex.get(idempotencyKey);
+    if (existingOpId) {
+      const existing = operationStore.get(existingOpId);
+      if (existing) {
+        return { operation: existing, isNew: false };
+      }
+    }
+  }
+
+  // Create new operation
+  const operationId = generateOperationId();
+  const now = Date.now();
+  const operation: OperationRecord = {
+    operationId,
+    idempotencyKey: idempotencyKey || operationId,
+    status: 'pending',
+    type,
+    request,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  operationStore.set(operationId, operation);
+  if (idempotencyKey) {
+    idempotencyIndex.set(idempotencyKey, operationId);
+  }
+
+  return { operation, isNew: true };
+}
+
+function updateOperation(
+  operationId: string,
+  updates: Partial<Pick<OperationRecord, 'status' | 'result' | 'error' | 'txSignature'>>
+): OperationRecord | null {
+  const operation = operationStore.get(operationId);
+  if (!operation) return null;
+
+  Object.assign(operation, updates, { updatedAt: Date.now() });
+  return operation;
+}
 
 // CORS middleware
 app.use((req, res, next) => {
@@ -26,19 +100,86 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
+// OPERATION TRACKING (Agent-Proof)
+// ============================================
+
+/**
+ * GET /earn/operation/:operationId
+ * Check status of any operation by ID
+ */
+app.get('/earn/operation/:operationId', (req, res) => {
+  const operation = operationStore.get(req.params.operationId);
+  
+  if (!operation) {
+    return res.status(404).json({ error: 'Operation not found' });
+  }
+
+  res.json({
+    operationId: operation.operationId,
+    idempotencyKey: operation.idempotencyKey,
+    type: operation.type,
+    status: operation.status,
+    txSignature: operation.txSignature,
+    result: operation.result,
+    error: operation.error,
+    createdAt: operation.createdAt,
+    updatedAt: operation.updatedAt,
+  });
+});
+
+/**
+ * GET /earn/templates
+ * List available token launch templates
+ */
+app.get('/earn/templates', (req, res) => {
+  const templates = Object.entries(TOKEN_TEMPLATES).map(([name, config]) => ({
+    name,
+    description: getTemplateDescription(name),
+    config: {
+      feeBps: config.feeBps,
+      earnCutBps: config.earnCutBps,
+      creatorCutBps: config.creatorCutBps,
+      buybackCutBps: config.buybackCutBps,
+      stakingCutBps: config.stakingCutBps,
+    },
+    // Convert to percentages for readability
+    readable: {
+      fee: `${config.feeBps / 100}%`,
+      earnCut: `${config.earnCutBps / 100}%`,
+      creatorCut: `${config.creatorCutBps / 100}%`,
+      buybackCut: `${config.buybackCutBps / 100}%`,
+      stakingCut: `${config.stakingCutBps / 100}%`,
+    },
+  }));
+
+  res.json({ templates });
+});
+
+function getTemplateDescription(name: string): string {
+  const descriptions: Record<string, string> = {
+    degen: 'High buyback (50%) for aggressive price support. Good for meme coins.',
+    creator: 'High creator cut (30%) for sustainable development income.',
+    community: 'High staking rewards (50%) for community-driven governance.',
+    lowfee: 'Minimal 1% fee for high-volume tokens.',
+  };
+  return descriptions[name] || 'Custom template';
+}
+
+// ============================================
 // TOKEN REGISTRATION
 // ============================================
 
 /**
  * POST /earn/register
  * Register a new token with Earn Protocol
+ * Supports templates for quick setup
  */
 app.post('/earn/register', async (req: Request, res: Response) => {
   try {
-    const body: RegisterRequest = req.body;
+    const body: RegisterWithTemplateRequest = req.body;
     
-    if (!body.tokenMint || !body.config) {
-      return res.status(400).json({ error: 'Missing tokenMint or config' });
+    if (!body.tokenMint) {
+      return res.status(400).json({ error: 'Missing tokenMint' });
     }
 
     // Get creator from auth header (simplified - would verify signature in production)
@@ -47,22 +188,84 @@ app.post('/earn/register', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Missing x-creator-wallet header' });
     }
 
+    // Check idempotency
+    const { operation, isNew } = getOrCreateOperation(
+      body.idempotencyKey,
+      'register',
+      body as Record<string, unknown>
+    );
+
+    // If operation already exists and completed, return cached result
+    if (!isNew && operation.status === 'completed') {
+      return res.json({
+        success: true,
+        operationId: operation.operationId,
+        status: operation.status,
+        txSignature: operation.txSignature,
+        result: operation.result,
+        message: 'Token already registered (idempotent)',
+      });
+    }
+
+    // Build config from template or custom settings
+    let configToUse: RegisterRequest['config'];
+    
+    if (body.template && TOKEN_TEMPLATES[body.template]) {
+      const template = TOKEN_TEMPLATES[body.template];
+      configToUse = {
+        feePercent: template.feeBps / 100,
+        earnCut: template.earnCutBps / 100,
+        creatorCut: template.creatorCutBps / 100,
+        buybackPercent: template.buybackCutBps / 100,
+        stakingPercent: template.stakingCutBps / 100,
+      };
+    } else if (body.config) {
+      configToUse = body.config;
+    } else {
+      // Default to community template
+      const template = TOKEN_TEMPLATES.community;
+      configToUse = {
+        feePercent: template.feeBps / 100,
+        earnCut: template.earnCutBps / 100,
+        creatorCut: template.creatorCutBps / 100,
+        buybackPercent: template.buybackCutBps / 100,
+        stakingPercent: template.stakingCutBps / 100,
+      };
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
+
     const creator = new PublicKey(creatorAddress);
-    const config = await protocol.registerToken(body, creator);
+    const registerReq: RegisterRequest = {
+      tokenMint: body.tokenMint,
+      config: configToUse,
+    };
+    const config = await protocol.registerToken(registerReq, creator);
+
+    const result = {
+      tokenMint: config.tokenMint.toBase58(),
+      creator: config.creator.toBase58(),
+      feePercent: config.feePercent,
+      earnCut: config.earnCut,
+      creatorCut: config.creatorCut,
+      buybackPercent: config.buybackPercent,
+      stakingPercent: config.stakingPercent,
+      registeredAt: config.registeredAt,
+      template: body.template || 'custom',
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result,
+      // txSignature would come from actual on-chain transaction
+    });
 
     res.json({
       success: true,
+      operationId: operation.operationId,
+      status: 'completed',
       message: 'Token registered with Earn Protocol',
-      config: {
-        tokenMint: config.tokenMint.toBase58(),
-        creator: config.creator.toBase58(),
-        feePercent: config.feePercent,
-        earnCut: config.earnCut,
-        creatorCut: config.creatorCut,
-        buybackPercent: config.buybackPercent,
-        stakingPercent: config.stakingPercent,
-        registeredAt: config.registeredAt,
-      },
+      result,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -137,16 +340,35 @@ app.get('/earn/tokens', (req, res) => {
 
 /**
  * POST /earn/trade
- * Process a trade and collect fees
+ * Process a trade and collect fees (with idempotency support)
  * In production this would be called via webhook from DEX
  */
 app.post('/earn/trade', async (req: Request, res: Response) => {
   try {
-    const { tokenMint, amount, isBuy } = req.body;
+    const { tokenMint, amount, isBuy, idempotencyKey, inputToken, outputToken, slippageBps, userWallet } = req.body as TradeRequest & { isBuy?: boolean };
 
     if (!tokenMint || !amount) {
       return res.status(400).json({ error: 'Missing tokenMint or amount' });
     }
+
+    // Check idempotency
+    const { operation, isNew } = getOrCreateOperation(
+      idempotencyKey,
+      'trade',
+      { tokenMint, amount, isBuy, inputToken, outputToken, slippageBps, userWallet }
+    );
+
+    if (!isNew && operation.status === 'completed') {
+      return res.json({
+        success: true,
+        operationId: operation.operationId,
+        status: operation.status,
+        txSignature: operation.txSignature,
+        result: operation.result,
+      });
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
 
     const distribution = await protocol.processTradeAndCollectFees(
       tokenMint,
@@ -154,8 +376,7 @@ app.post('/earn/trade', async (req: Request, res: Response) => {
       isBuy ?? true
     );
 
-    res.json({
-      success: true,
+    const result = {
       feeDistribution: {
         totalFee: distribution.totalFee.toString(),
         earnAmount: distribution.earnAmount.toString(),
@@ -163,6 +384,18 @@ app.post('/earn/trade', async (req: Request, res: Response) => {
         buybackAmount: distribution.buybackAmount.toString(),
         stakingAmount: distribution.stakingAmount.toString(),
       },
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result,
+    });
+
+    res.json({
+      success: true,
+      operationId: operation.operationId,
+      status: 'completed',
+      result,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -208,29 +441,58 @@ app.get('/earn/quote', (req, res) => {
 
 /**
  * POST /earn/stake
- * Stake tokens
+ * Stake tokens (with idempotency support)
  */
 app.post('/earn/stake', async (req: Request, res: Response) => {
   try {
-    const { tokenMint, amount } = req.body as StakeRequest;
+    const { tokenMint, amount, idempotencyKey } = req.body as StakeRequestV2;
     const walletAddress = req.headers['x-wallet'] as string;
 
     if (!tokenMint || !amount || !walletAddress) {
       return res.status(400).json({ error: 'Missing tokenMint, amount, or x-wallet header' });
     }
 
+    // Check idempotency
+    const { operation, isNew } = getOrCreateOperation(
+      idempotencyKey,
+      'stake',
+      { tokenMint, amount, wallet: walletAddress }
+    );
+
+    if (!isNew && operation.status === 'completed') {
+      return res.json({
+        success: true,
+        operationId: operation.operationId,
+        status: operation.status,
+        txSignature: operation.txSignature,
+        result: operation.result,
+      });
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
+
     const wallet = new PublicKey(walletAddress);
     const position = await protocol.stake(tokenMint, wallet, BigInt(amount));
 
+    const result = {
+      stakedAmount: position.stakedAmount.toString(),
+      newTotal: position.stakedAmount.toString(),
+      wallet: position.wallet.toBase58(),
+      tokenMint: position.tokenMint.toBase58(),
+      stakedAt: position.stakedAt,
+      pendingRewards: position.pendingRewards.toString(),
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result,
+    });
+
     res.json({
       success: true,
-      position: {
-        wallet: position.wallet.toBase58(),
-        tokenMint: position.tokenMint.toBase58(),
-        stakedAmount: position.stakedAmount.toString(),
-        stakedAt: position.stakedAt,
-        pendingRewards: position.pendingRewards.toString(),
-      },
+      operationId: operation.operationId,
+      status: 'completed',
+      result,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -239,24 +501,54 @@ app.post('/earn/stake', async (req: Request, res: Response) => {
 
 /**
  * POST /earn/unstake
- * Unstake tokens
+ * Unstake tokens (with idempotency support)
  */
 app.post('/earn/unstake', async (req: Request, res: Response) => {
   try {
-    const { tokenMint, amount } = req.body as UnstakeRequest;
+    const { tokenMint, amount, idempotencyKey } = req.body as UnstakeRequestV2;
     const walletAddress = req.headers['x-wallet'] as string;
 
     if (!tokenMint || !amount || !walletAddress) {
       return res.status(400).json({ error: 'Missing tokenMint, amount, or x-wallet header' });
     }
 
+    // Check idempotency
+    const { operation, isNew } = getOrCreateOperation(
+      idempotencyKey,
+      'unstake',
+      { tokenMint, amount, wallet: walletAddress }
+    );
+
+    if (!isNew && operation.status === 'completed') {
+      return res.json({
+        success: true,
+        operationId: operation.operationId,
+        status: operation.status,
+        txSignature: operation.txSignature,
+        result: operation.result,
+      });
+    }
+
+    updateOperation(operation.operationId, { status: 'processing' });
+
     const wallet = new PublicKey(walletAddress);
-    const result = await protocol.unstake(tokenMint, wallet, BigInt(amount));
+    const unstakeResult = await protocol.unstake(tokenMint, wallet, BigInt(amount));
+
+    const result = {
+      unstaked: unstakeResult.unstaked.toString(),
+      rewardsClaimed: unstakeResult.rewards.toString(),
+    };
+
+    updateOperation(operation.operationId, {
+      status: 'completed',
+      result,
+    });
 
     res.json({
       success: true,
-      unstaked: result.unstaked.toString(),
-      rewardsClaimed: result.rewards.toString(),
+      operationId: operation.operationId,
+      status: 'completed',
+      result,
     });
   } catch (error: any) {
     res.status(400).json({ error: error.message });

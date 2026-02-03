@@ -180,3 +180,139 @@ export interface RegisterRequestV2 extends RegisterRequest {
   creatorWallet: string;
   proof?: CreatorProof;  // Required in production, optional for hackathon
 }
+
+// ============================================
+// TOKEN LAUNCH TEMPLATES
+// ============================================
+
+/**
+ * Preset configurations for common token launch strategies
+ */
+export interface TokenTemplate {
+  feeBps: number;        // Fee on trades in basis points (300 = 3%)
+  earnCutBps: number;    // Earn Protocol cut (1000 = 10%)
+  creatorCutBps: number; // Creator cut
+  buybackCutBps: number; // Buyback allocation
+  stakingCutBps: number; // Staking rewards allocation
+}
+
+/**
+ * Available token templates
+ */
+export const TOKEN_TEMPLATES: Record<string, TokenTemplate> = {
+  // High buyback for price support - good for degen/meme coins
+  degen: {
+    feeBps: 300,         // 3% fee
+    earnCutBps: 1000,    // 10% to Earn (minimum)
+    creatorCutBps: 1000, // 10% to creator
+    buybackCutBps: 5000, // 50% to buyback (aggressive)
+    stakingCutBps: 3000, // 30% to stakers
+  },
+  // High creator cut for sustainable projects
+  creator: {
+    feeBps: 200,         // 2% fee
+    earnCutBps: 1000,    // 10% to Earn
+    creatorCutBps: 3000, // 30% to creator (high)
+    buybackCutBps: 3000, // 30% to buyback
+    stakingCutBps: 3000, // 30% to stakers
+  },
+  // High staking rewards for community-driven tokens
+  community: {
+    feeBps: 200,         // 2% fee
+    earnCutBps: 1000,    // 10% to Earn
+    creatorCutBps: 1000, // 10% to creator
+    buybackCutBps: 3000, // 30% to buyback
+    stakingCutBps: 5000, // 50% to stakers (community focused)
+  },
+  // Minimal fees for high-volume tokens
+  lowfee: {
+    feeBps: 100,         // 1% fee
+    earnCutBps: 1000,    // 10% to Earn
+    creatorCutBps: 2000, // 20% to creator
+    buybackCutBps: 4000, // 40% to buyback
+    stakingCutBps: 3000, // 30% to stakers
+  },
+};
+
+export type TemplateName = keyof typeof TOKEN_TEMPLATES;
+
+// ============================================
+// IDEMPOTENCY & OPERATION TRACKING
+// ============================================
+
+/**
+ * Operation status for tracking async operations
+ */
+export type OperationStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Operation record for idempotency
+ */
+export interface OperationRecord {
+  operationId: string;
+  idempotencyKey: string;
+  status: OperationStatus;
+  type: 'register' | 'stake' | 'unstake' | 'claim' | 'trade' | 'buyback';
+  request: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: string;
+  txSignature?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Request with idempotency key
+ */
+export interface IdempotentRequest {
+  idempotencyKey?: string;  // Client-generated, ensures same response for same key
+}
+
+/**
+ * Register request with template support
+ */
+export interface RegisterWithTemplateRequest extends IdempotentRequest {
+  tokenMint: string;
+  template?: TemplateName;  // Use preset if provided
+  config?: {                // Or custom config
+    feePercent?: number;
+    earnCut?: number;
+    creatorCut?: number;
+    buybackPercent?: number;
+    stakingPercent?: number;
+  };
+}
+
+/**
+ * Stake request with idempotency
+ */
+export interface StakeRequestV2 extends StakeRequest, IdempotentRequest {}
+
+/**
+ * Unstake request with idempotency
+ */
+export interface UnstakeRequestV2 extends UnstakeRequest, IdempotentRequest {}
+
+/**
+ * Trade request with idempotency
+ */
+export interface TradeRequest extends IdempotentRequest {
+  tokenMint: string;
+  inputToken: string;
+  outputToken: string;
+  amount: string | number;
+  slippageBps?: number;
+  userWallet: string;
+}
+
+/**
+ * Standard API response with operation tracking
+ */
+export interface ApiResponse<T = unknown> {
+  success: boolean;
+  operationId?: string;
+  status?: OperationStatus;
+  txSignature?: string;
+  result?: T;
+  error?: string;
+}

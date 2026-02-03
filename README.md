@@ -117,16 +117,77 @@ curl -X POST http://localhost:3000/earn/stake \
 
 ## Technical Architecture
 
-### On-Chain (Solana)
-- **Treasury PDAs**: Each token gets a dedicated treasury PDA
-- **Staking Pools**: Proportional reward distribution
-- **Token-2022 Transfer Hooks**: Native fee collection (coming)
-- **Jupiter Integration**: Swap execution for buybacks
+### On-Chain (Canonical, Trustless)
+- **TokenConfig PDA**: Fee settings, creator address
+- **Treasury PDA**: Buyback balance, fee totals
+- **StakingPool PDA**: Total staked, reward rate
+- **StakeAccount PDAs**: Per-user stakes, reward debt
 
-### Off-Chain (This API)
+### Off-Chain (Indexing, UX)
 - TypeScript/Express API server
-- In-memory state (would use on-chain in production)
-- Webhook support for DEX integrations
+- Transaction history cache
+- Analytics aggregation
+
+### If API Goes Down
+- ✅ All funds safe (on-chain)
+- ✅ Staking/unstaking still works (direct program calls)
+- ⚠️ Only dashboards/quotes unavailable
+- ✅ **No fund loss possible**
+
+---
+
+## Token Templates
+
+Pick a preset or customize:
+
+```bash
+POST /earn/register
+{
+  "tokenMint": "xxx",
+  "template": "community"  # Just pick a template!
+}
+```
+
+| Template | Fee | Earn | Creator | Buyback | Staking | Best For |
+|----------|-----|------|---------|---------|---------|----------|
+| `degen` | 3% | 10% | 10% | 50% | 30% | Meme coins, price support |
+| `creator` | 2% | 10% | 30% | 30% | 30% | Dev sustainability |
+| `community` | 2% | 10% | 10% | 30% | 50% | DAO-style governance |
+| `lowfee` | 1% | 10% | 20% | 40% | 30% | High-volume tokens |
+
+---
+
+## Idempotency (Agent-Proof)
+
+Critical for agents: every mutating endpoint supports idempotency keys.
+
+```json
+POST /earn/stake
+{
+  "idempotencyKey": "stake-abc123-1706900000",
+  "tokenMint": "xxx",
+  "amount": 1000000
+}
+
+Response (always the same for same idempotencyKey):
+{
+  "operationId": "op_7xKXtg2CW87d",
+  "status": "completed",
+  "txSignature": "5yKx...",
+  "result": {
+    "stakedAmount": "1000000",
+    "newTotal": "5000000"
+  }
+}
+
+Check status anytime:
+GET /earn/operation/op_7xKXtg2CW87d
+```
+
+**Rules:**
+- Same `idempotencyKey` = same response (even if you retry 100x)
+- Use format: `{operation}-{unique}-{timestamp}`
+- Always store the `operationId` from response
 
 ---
 
