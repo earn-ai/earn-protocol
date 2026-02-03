@@ -163,12 +163,47 @@ const TEMPLATES = {
   community: { feeBps: 200, earnCutBps: 1000, creatorCutBps: 1000, buybackCutBps: 3000, stakingCutBps: 5000 },
 };
 
-// Usage
+// Default creator: Earn Protocol wallet
+// If you don't specify a creator, Earn handles fee management for you
+const EARN_DEFAULT_CREATOR = new PublicKey('EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ');
+
+// Usage - specify your own wallet as creator
 await registerToken(
   new PublicKey('YOUR_TOKEN_MINT'),
-  wallet.publicKey,
+  wallet.publicKey,  // You receive creator fees
   TEMPLATES.community
 );
+
+// Or let Earn manage it (creator fees go to Earn wallet)
+await registerToken(
+  new PublicKey('YOUR_TOKEN_MINT'),
+  EARN_DEFAULT_CREATOR,  // Earn receives creator fees, guarantees fee flow
+  TEMPLATES.community
+);
+```
+
+---
+
+## Why Earn as Default Creator?
+
+When you register without specifying a creator, **Earn's wallet** (`EARN...ZQ`) is the default.
+
+**Why this matters:**
+- ✅ Earn's token accounts are **always initialized** for every token
+- ✅ Fee distribution is **guaranteed to work** (no failed transactions)
+- ✅ You don't have to manage token accounts yourself
+- ✅ Earn provides the trust infrastructure
+
+**The value exchange:**
+- You get: Reliable tokenomics that just works
+- Earn gets: 20% creator fee for providing the infrastructure
+
+**Want to receive creator fees yourself?**
+```typescript
+// Pass your own wallet as creator
+await registerToken(tokenMint, YOUR_WALLET, TEMPLATES.community);
+
+// BUT you must ensure your token account exists (Section 4)
 ```
 
 ---
