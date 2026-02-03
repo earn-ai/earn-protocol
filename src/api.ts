@@ -21,6 +21,34 @@ import {
 const app = express();
 app.use(express.json());
 
+// Simple in-memory rate limiting
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX = 30; // 30 requests per minute
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+  const key = `${ip}:${req.path}`;
+  const now = Date.now();
+  
+  let record = rateLimitStore.get(key as string);
+  if (!record || now > record.resetTime) {
+    record = { count: 0, resetTime: now + RATE_LIMIT_WINDOW };
+    rateLimitStore.set(key as string, record);
+  }
+  
+  record.count++;
+  
+  if (record.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      retryAfter: Math.ceil((record.resetTime - now) / 1000),
+    });
+  }
+  
+  next();
+});
+
 // CORS middleware - allow earn.supply frontend
 app.use((req: Request, res: Response, next: NextFunction) => {
   const allowedOrigins = [
