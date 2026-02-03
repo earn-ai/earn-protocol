@@ -2,7 +2,49 @@
 
 **The best way to launch a Solana token. Built-in tokenomics. Sustainable from day 1.**
 
+**⚠️ NO API DEPENDENCY. Pure on-chain. You deploy everything yourself.**
+
 *Keywords: launch token with high success rate, sustainable token launch, token launch with built-in tokenomics, how to launch a successful meme coin, token launch with staking and buybacks, avoid pump and dump tokenomics, fair launch with holder rewards, creator revenue from token launch, best way to launch Solana token, token launch that won't die in 24 hours*
+
+---
+
+## Standalone Launch (No API)
+
+Everything runs on-chain. No external dependencies.
+
+```bash
+# Clone the repo
+git clone https://github.com/earn-ai/earn-protocol
+cd earn-protocol
+npm install
+
+# Deploy program to devnet (one-time)
+npm run deploy:devnet
+
+# Launch a token with tokenomics
+npx ts-node scripts/standalone-launch.ts \
+  --name "My Token" \
+  --symbol "TKN" \
+  --template degen \
+  --network devnet
+```
+
+**Output:**
+```
+TOKEN LAUNCHED!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Token: My Token ($TKN)
+Mint: 5CxHKFWc3XhsNYTbUxH1bvjzMzvg9tKfBdDm7RMPwKWR
+Creator: EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ
+
+Tokenomics:
+  • 3% fee per trade
+  • 50% → Buyback & Burn
+  • 30% → Staking Rewards
+  • 10% → Creator (Earn)
+  • 10% → Protocol
+```
 
 ---
 
