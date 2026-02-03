@@ -24,7 +24,12 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
     stake_account.pending_rewards = 0;
     stake_account.last_claim_at = clock.unix_timestamp;
     
-    // Transfer rewards
+    // Transfer rewards (check balance first to prevent insolvency drain)
+    let available_rewards = ctx.accounts.rewards_token_account.amount;
+    let rewards_to_pay = pending_rewards.min(available_rewards);
+    
+    require!(rewards_to_pay > 0, EarnError::InsufficientBalance);
+    
     let token_mint_key = ctx.accounts.token_mint.key();
     let seeds = &[
         STAKING_POOL_SEED,
@@ -43,8 +48,12 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
             },
             signer,
         ),
-        pending_rewards,
+        rewards_to_pay,
     )?;
+    
+    if rewards_to_pay < pending_rewards {
+        msg!("Warning: Only {} of {} rewards available", rewards_to_pay, pending_rewards);
+    }
     
     // Release reentrancy lock
     let stake_account = &mut ctx.accounts.stake_account;
@@ -94,8 +103,11 @@ pub struct ClaimRewards<'info> {
     )]
     pub staker_token_account: Account<'info, TokenAccount>,
     
-    /// Pool's rewards token account
-    #[account(mut)]
+    /// Pool's rewards token account (must match the token mint)
+    #[account(
+        mut,
+        constraint = rewards_token_account.mint == token_mint.key() @ EarnError::InvalidTokenAccount,
+    )]
     pub rewards_token_account: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,

@@ -11,15 +11,18 @@ pub fn unstake(
 ) -> Result<()> {
     require!(amount > 0, EarnError::InvalidAmount);
     
-    let stake_account = &ctx.accounts.stake_account;
+    let staking_pool = &mut ctx.accounts.staking_pool;
+    let stake_account = &mut ctx.accounts.stake_account;
+    let clock = Clock::get()?;
+    
+    // Reentrancy protection
+    require!(!stake_account.is_locked, EarnError::Unauthorized);
+    stake_account.is_locked = true;
+    
     require!(
         stake_account.staked_amount >= amount,
         EarnError::InsufficientStake
     );
-    
-    let staking_pool = &mut ctx.accounts.staking_pool;
-    let stake_account = &mut ctx.accounts.stake_account;
-    let clock = Clock::get()?;
     
     // Calculate pending rewards before unstaking
     let pending_rewards = stake_account.calculate_pending_rewards(staking_pool.reward_per_token_stored);
@@ -62,21 +65,33 @@ pub fn unstake(
         amount,
     )?;
     
-    // Transfer rewards if any
+    // Transfer rewards if any (check balance first to prevent insolvency drain)
     if pending_rewards > 0 {
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.rewards_token_account.to_account_info(),
-                    to: ctx.accounts.staker_token_account.to_account_info(),
-                    authority: staking_pool.to_account_info(),
-                },
-                signer,
-            ),
-            pending_rewards,
-        )?;
+        let available_rewards = ctx.accounts.rewards_token_account.amount;
+        let rewards_to_pay = pending_rewards.min(available_rewards);
+        
+        if rewards_to_pay > 0 {
+            token::transfer(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.rewards_token_account.to_account_info(),
+                        to: ctx.accounts.staker_token_account.to_account_info(),
+                        authority: staking_pool.to_account_info(),
+                    },
+                    signer,
+                ),
+                rewards_to_pay,
+            )?;
+        }
+        
+        if rewards_to_pay < pending_rewards {
+            msg!("Warning: Only {} of {} rewards available", rewards_to_pay, pending_rewards);
+        }
     }
+    
+    // Release reentrancy lock
+    ctx.accounts.stake_account.is_locked = false;
     
     msg!("Unstaked {} tokens. Rewards claimed: {}", amount, pending_rewards);
     
@@ -123,8 +138,11 @@ pub struct Unstake<'info> {
     )]
     pub staking_token_account: Account<'info, TokenAccount>,
     
-    /// Pool's rewards token account
-    #[account(mut)]
+    /// Pool's rewards token account (must match the token mint)
+    #[account(
+        mut,
+        constraint = rewards_token_account.mint == token_mint.key() @ EarnError::InvalidTokenAccount,
+    )]
     pub rewards_token_account: Account<'info, TokenAccount>,
     
     pub token_program: Program<'info, Token>,

@@ -40,4 +40,7 @@ pub enum EarnError {
     
     #[msg("Invalid amount")]
     InvalidAmount,
+    
+    #[msg("Invalid token account")]
+    InvalidTokenAccount,
 }
