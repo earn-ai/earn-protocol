@@ -20,6 +20,28 @@ import {
 const app = express();
 app.use(express.json());
 
+// CORS middleware - allow earn.supply frontend
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const allowedOrigins = [
+    'https://earn.supply',
+    'https://www.earn.supply',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ];
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-wallet, x-idempotency-key');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Initialize protocol
 const protocol = new EarnProtocol(process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com');
 
