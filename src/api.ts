@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { PublicKey } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import crypto from 'crypto';
+import SwapBuilder, { SwapRequest } from './swap';
 import { EarnProtocol } from './protocol';
 import { 
   RegisterRequest, 
@@ -110,15 +111,21 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Earn Protocol',
     description: 'Tokenomics-as-a-service for memecoins',
+    version: '0.2.0',
     docs: 'https://github.com/earn-ai/earn-protocol',
+    website: 'https://earn.supply',
     endpoints: {
       health: '/health',
       stats: '/earn/stats',
       tokens: '/earn/tokens',
       register: 'POST /earn/register',
-      trade: 'POST /earn/trade',
-      stake: 'POST /earn/stake'
-    }
+      swap: 'POST /earn/swap',
+      swapQuote: 'GET /earn/swap/quote',
+      stake: 'POST /earn/stake',
+      unstake: 'POST /earn/unstake',
+      claim: 'POST /earn/claim',
+    },
+    new: '🚀 POST /earn/swap - Atomic swaps with fee collection via Jupiter',
   });
 });
 
@@ -948,6 +955,196 @@ app.get('/earn/stats', (req, res) => {
       earnTreasury: stats.earnTreasury.toString(),
     },
   });
+});
+
+// ============================================
+// SWAP WITH FEES (Jupiter Integration)
+// ============================================
+
+// Initialize swap builder
+const connection = new Connection(
+  process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com'
+);
+const EARN_PROTOCOL_WALLET = process.env.EARN_WALLET || 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
+const swapBuilder = new SwapBuilder(connection, EARN_PROTOCOL_WALLET);
+
+/**
+ * POST /earn/swap
+ * 
+ * Build a swap transaction with automatic fee collection.
+ * Returns an unsigned transaction for the user to sign and submit.
+ * 
+ * Features:
+ * - Wraps Jupiter swap with fee collection
+ * - Atomic execution (swap + fees in one TX)
+ * - No custody - user signs and submits
+ * - Fees split per token config
+ */
+app.post('/earn/swap', async (req: Request, res: Response) => {
+  try {
+    const {
+      tokenMint,
+      inputMint,
+      outputMint,
+      amount,
+      userPublicKey,
+      slippageBps,
+      priorityFee,
+    } = req.body as SwapRequest;
+
+    // Validate required fields
+    if (!tokenMint || !inputMint || !outputMint || !amount || !userPublicKey) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['tokenMint', 'inputMint', 'outputMint', 'amount', 'userPublicKey'],
+      });
+    }
+
+    // Check if token is registered with Earn
+    const config = protocol.getTokenConfig(tokenMint);
+    if (!config) {
+      return res.status(404).json({
+        error: 'Token not registered with Earn Protocol',
+        tokenMint,
+        hint: 'Register the token first with POST /earn/register',
+      });
+    }
+
+    // Verify the token is involved in the swap
+    if (tokenMint !== inputMint && tokenMint !== outputMint) {
+      return res.status(400).json({
+        error: 'Token must be either inputMint or outputMint',
+        tokenMint,
+        inputMint,
+        outputMint,
+      });
+    }
+
+    // Build swap config for SwapBuilder
+    const swapConfig = {
+      tokenMint: config.tokenMint.toBase58(),
+      creator: config.creator.toBase58(),
+      feePercent: config.feePercent,
+      earnCut: config.earnCut,
+      creatorCut: config.creatorCut,
+      buybackPercent: config.buybackPercent,
+      stakingPercent: config.stakingPercent,
+    };
+
+    // Build atomic swap with fees
+    const result = await swapBuilder.buildAtomicSwapWithFees(
+      {
+        tokenMint,
+        inputMint,
+        outputMint,
+        amount,
+        userPublicKey,
+        slippageBps: slippageBps || 100,
+        priorityFee,
+      },
+      swapConfig
+    );
+
+    res.json({
+      success: true,
+      transaction: result.transaction,
+      expectedOutput: result.expectedOutput,
+      fee: {
+        total: result.feeAmount,
+        breakdown: result.feeBreakdown,
+        percent: config.feePercent,
+      },
+      priceImpact: result.priceImpact,
+      route: result.route,
+      instructions: [
+        'Transaction is base64 encoded and unsigned',
+        'Deserialize with VersionedTransaction.deserialize() or Transaction.from()',
+        'Sign with user wallet',
+        'Submit to Solana network',
+      ],
+    });
+  } catch (error: any) {
+    console.error('Swap error:', error);
+    res.status(500).json({
+      error: 'Swap transaction build failed',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /earn/swap/quote
+ * 
+ * Get a quote for a swap without building the transaction.
+ * Useful for showing expected output and fees before committing.
+ */
+app.get('/earn/swap/quote', async (req: Request, res: Response) => {
+  try {
+    const { tokenMint, inputMint, outputMint, amount, slippageBps } = req.query;
+
+    if (!tokenMint || !inputMint || !outputMint || !amount) {
+      return res.status(400).json({
+        error: 'Missing required query params',
+        required: ['tokenMint', 'inputMint', 'outputMint', 'amount'],
+      });
+    }
+
+    // Check if token is registered
+    const config = protocol.getTokenConfig(tokenMint as string);
+    if (!config) {
+      return res.status(404).json({
+        error: 'Token not registered with Earn Protocol',
+        tokenMint,
+      });
+    }
+
+    // Get Jupiter quote
+    const quote = await swapBuilder.getJupiterQuote(
+      inputMint as string,
+      outputMint as string,
+      parseInt(amount as string),
+      parseInt((slippageBps as string) || '100')
+    );
+
+    // Calculate fees
+    const outputAmount = BigInt(quote.outAmount);
+    const feePercent = config.feePercent / 100;
+    const totalFee = (outputAmount * BigInt(Math.floor(feePercent * 100))) / 10000n;
+    
+    const earnShare = (totalFee * BigInt(config.earnCut * 100)) / 10000n;
+    const creatorShare = (totalFee * BigInt(config.creatorCut * 100)) / 10000n;
+    const buybackShare = (totalFee * BigInt(config.buybackPercent * 100)) / 10000n;
+    const stakingShare = totalFee - earnShare - creatorShare - buybackShare;
+
+    // Net output after fees
+    const netOutput = outputAmount - totalFee;
+
+    res.json({
+      inputMint: quote.inputMint,
+      outputMint: quote.outputMint,
+      inputAmount: quote.inAmount,
+      grossOutput: quote.outAmount,
+      fee: {
+        total: totalFee.toString(),
+        percent: config.feePercent,
+        breakdown: {
+          earnShare: earnShare.toString(),
+          creatorShare: creatorShare.toString(),
+          buybackShare: buybackShare.toString(),
+          stakingShare: stakingShare.toString(),
+        },
+      },
+      netOutput: netOutput.toString(),
+      priceImpact: quote.priceImpactPct,
+      route: quote.routePlan,
+    });
+  } catch (error: any) {
+    console.error('Quote error:', error);
+    res.status(500).json({
+      error: 'Quote failed',
+      message: error.message,
+    });
+  }
 });
 
 // Error handler
