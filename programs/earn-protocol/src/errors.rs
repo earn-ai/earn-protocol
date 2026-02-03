@@ -43,4 +43,10 @@ pub enum EarnError {
     
     #[msg("Invalid token account")]
     InvalidTokenAccount,
+    
+    #[msg("Buyback cooldown not elapsed")]
+    BuybackCooldownNotElapsed,
+    
+    #[msg("Slippage tolerance exceeded")]
+    SlippageExceeded,
 }

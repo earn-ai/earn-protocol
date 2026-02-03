@@ -38,6 +38,12 @@ impl Treasury {
     
     /// Default buyback threshold: 0.1 SOL equivalent
     pub const DEFAULT_BUYBACK_THRESHOLD: u64 = 100_000_000; // 0.1 SOL in lamports
+    
+    /// Minimum cooldown between buybacks: 1 hour
+    pub const BUYBACK_COOLDOWN_SECONDS: i64 = 3600;
+    
+    /// Maximum slippage allowed: 5%
+    pub const MAX_SLIPPAGE_BPS: u64 = 500;
 }
 
 /// Earn Protocol Master Treasury

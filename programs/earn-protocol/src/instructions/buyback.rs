@@ -10,10 +10,17 @@ use crate::errors::EarnError;
 pub fn execute_buyback(
     ctx: Context<ExecuteBuyback>,
     amount: u64,
-    _min_tokens_out: u64, // For Jupiter slippage protection
+    min_tokens_out: u64, // For Jupiter slippage protection
 ) -> Result<()> {
     let treasury = &mut ctx.accounts.treasury;
     let clock = Clock::get()?;
+    
+    // Cooldown check - prevent rapid-fire buybacks
+    let time_since_last = clock.unix_timestamp.saturating_sub(treasury.last_buyback);
+    require!(
+        time_since_last >= Treasury::BUYBACK_COOLDOWN_SECONDS,
+        EarnError::BuybackCooldownNotElapsed
+    );
     
     require!(
         treasury.balance >= treasury.buyback_threshold,
@@ -23,6 +30,12 @@ pub fn execute_buyback(
     require!(
         amount <= treasury.balance,
         EarnError::InsufficientBalance
+    );
+    
+    // Slippage protection - must specify minimum tokens expected
+    require!(
+        min_tokens_out > 0,
+        EarnError::InvalidAmount
     );
     
     // In production, this would:
@@ -40,6 +53,13 @@ pub fn execute_buyback(
     
     // Burn the tokens (assuming we received them from the swap)
     let tokens_to_burn = ctx.accounts.tokens_to_burn.amount;
+    
+    // Slippage check - ensure we got at least min_tokens_out from the swap
+    require!(
+        tokens_to_burn >= min_tokens_out,
+        EarnError::SlippageExceeded
+    );
+    
     if tokens_to_burn > 0 {
         let token_mint_key = ctx.accounts.token_mint.key();
         let seeds = &[
