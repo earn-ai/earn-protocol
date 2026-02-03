@@ -27,7 +27,7 @@
   },
   "keywords": [
     "pump-fun",
-    "pumpfun", 
+    "pumpfun",
     "solana-token",
     "fair-launch",
     "bonding-curve",
@@ -47,15 +47,20 @@
     "url": "https://github.com/earn-ai/earn-protocol"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.87.6",
+    "@pump-fun/pump-sdk": "^1.26.0",
+    "@pump-fun/pump-swap-sdk": "^1.13.0",
     "@solana/spl-token": "^0.3.9",
-    "express": "^4.18.2",
-    "dotenv": "^16.3.1"
+    "@solana/web3.js": "^1.87.6",
+    "@types/cors": "^2.8.19",
+    "bs58": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@types/express": "^4.17.25",
     "@types/node": "^20.10.0",
-    "typescript": "^5.3.2",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.2"
   }
 }
