@@ -1,0 +1,42 @@
+name: Build and Deploy to Devnet
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SOLANA_VERSION: 1.18.17
+  ANCHOR_VERSION: 0.30.1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: dtolnay/rust-action@stable
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install ${{ env.ANCHOR_VERSION }}
+          avm use ${{ env.ANCHOR_VERSION }}
+          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+      - name: Setup keypair
+        run: |
+          echo '${{ secrets.DEVNET_DEPLOYER_KEYPAIR }}' > deployer.json
+          solana config set --url devnet --keypair deployer.json
+      - name: Build
+        run: anchor build
+      - name: Deploy
+        run: anchor deploy --provider.cluster devnet
+        env:
+          ANCHOR_WALLET: deployer.json
+      - name: Output Program ID
+        run: solana address -k target/deploy/earn_protocol-keypair.json
