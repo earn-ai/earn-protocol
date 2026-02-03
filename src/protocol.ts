@@ -83,15 +83,16 @@ export class EarnProtocol {
       throw new Error('Fee percent must be between 0.1% and 10%');
     }
 
-    // Default values
+    // Default values (all 4 splits must sum to 100%)
     const earnCut = config.earnCut ?? 10;       // 10% to Earn
     const creatorCut = config.creatorCut ?? 20; // 20% to Creator
-    const remaining = 100 - earnCut - creatorCut;
-    const buybackPercent = config.buybackPercent ?? 50; // 50% of remaining
-    const stakingPercent = config.stakingPercent ?? 50; // 50% of remaining
+    const buybackPercent = config.buybackPercent ?? 35; // 35% to buyback
+    const stakingPercent = config.stakingPercent ?? 35; // 35% to staking
 
-    if (buybackPercent + stakingPercent !== 100) {
-      throw new Error('Buyback + staking must equal 100%');
+    // Validate all 4 cuts sum to 100%
+    const totalCuts = earnCut + creatorCut + buybackPercent + stakingPercent;
+    if (totalCuts !== 100) {
+      throw new Error(`Fee splits must equal 100%, got ${totalCuts}% (earn=${earnCut}, creator=${creatorCut}, buyback=${buybackPercent}, staking=${stakingPercent})`);
     }
 
     // Create token config
@@ -144,7 +145,7 @@ export class EarnProtocol {
     console.log(`✅ Registered token: ${request.tokenMint}`);
     console.log(`   Treasury PDA: ${treasuryPDA.toBase58()}`);
     console.log(`   Fee: ${config.feePercent}%`);
-    console.log(`   Distribution: Earn ${earnCut}% | Creator ${creatorCut}% | Buyback ${buybackPercent * remaining / 100}% | Staking ${stakingPercent * remaining / 100}%`);
+    console.log(`   Distribution: Earn ${earnCut}% | Creator ${creatorCut}% | Buyback ${buybackPercent}% | Staking ${stakingPercent}%`);
 
     return tokenConfig;
   }
