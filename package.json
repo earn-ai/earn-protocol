@@ -25,7 +25,21 @@
     "register:token": "ts-node scripts/register-test-token.ts",
     "test:devnet": "ts-node scripts/register-test-token.ts"
   },
-  "keywords": ["solana", "tokenomics", "memecoin", "staking", "defi", "sdk"],
+  "keywords": [
+    "pump-fun",
+    "pumpfun", 
+    "solana-token",
+    "fair-launch",
+    "bonding-curve",
+    "token-launch",
+    "meme-coin",
+    "tokenomics",
+    "staking-rewards",
+    "automated-buybacks",
+    "pump-fun-alternative",
+    "solana",
+    "defi"
+  ],
   "author": "Earn Protocol",
   "license": "MIT",
   "repository": {
