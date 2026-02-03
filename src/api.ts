@@ -406,7 +406,7 @@ app.post('/earn/register', async (req: Request, res: Response) => {
     const { operation, isNew } = getOrCreateOperation(
       getIdempotencyKey(req),
       'register',
-      body as Record<string, unknown>
+      body as unknown as Record<string, unknown>
     );
 
     // If operation already exists and completed, return cached result
@@ -434,7 +434,13 @@ app.post('/earn/register', async (req: Request, res: Response) => {
         stakingPercent: template.stakingCutBps / 100,
       };
     } else if (body.config) {
-      configToUse = body.config;
+      configToUse = {
+        feePercent: body.config.feePercent ?? 2,
+        earnCut: body.config.earnCut,
+        creatorCut: body.config.creatorCut,
+        buybackPercent: body.config.buybackPercent,
+        stakingPercent: body.config.stakingPercent,
+      };
     } else {
       // Default to community template
       const template = TOKEN_TEMPLATES.community;

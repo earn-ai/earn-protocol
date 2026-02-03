@@ -151,7 +151,7 @@ export class EarnSDK {
       body: options?.body ? JSON.stringify(options.body) : undefined,
     });
 
-    const data = await response.json();
+    const data = await response.json() as { error?: string } & T;
 
     if (!response.ok) {
       throw new Error(data.error || `HTTP ${response.status}`);
