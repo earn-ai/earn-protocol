@@ -1,6 +1,6 @@
 {
   "name": "@earn-protocol/sdk",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Tokenomics-as-a-service for memecoins - SDK & API server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

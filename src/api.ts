@@ -146,6 +146,7 @@ app.get('/', (req, res) => {
       health: '/health',
       stats: '/earn/stats',
       tokens: '/earn/tokens',
+      templates: '/earn/templates',
       register: 'POST /earn/register',
       swap: 'POST /earn/swap',
       swapQuote: 'GET /earn/swap/quote',
@@ -153,7 +154,8 @@ app.get('/', (req, res) => {
       unstake: 'POST /earn/unstake',
       claim: 'POST /earn/claim',
     },
-    new: '🚀 POST /earn/swap - Atomic swaps with fee collection via Jupiter',
+    agentSDK: 'https://github.com/earn-ai/earn-protocol/blob/main/AGENT_SDK.md',
+    new: '🚀 Atomic swaps + Agent SDK for easy integration',
   });
 });
 
@@ -972,7 +974,7 @@ app.get('/earn/stats', (req, res) => {
 
   res.json({
     protocol: 'Earn Protocol',
-    version: '0.1.0',
+    version: '0.3.0',
     stats: {
       totalTokensRegistered: stats.totalTokensRegistered,
       totalFeesCollected: stats.totalFeesCollected.toString(),
