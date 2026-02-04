@@ -2,6 +2,10 @@
 members = [
     "programs/*"
 ]
+resolver = "2"
+
+[workspace.dependencies]
+blake3 = "=1.5.0"
 
 [profile.release]
 overflow-checks = true

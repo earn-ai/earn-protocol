@@ -67,7 +67,8 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     
     // Update rewards before modifying stake
     let reward_per_token = pool.reward_per_token();
-    stake_account.update_rewards(reward_per_token, stake_account.amount);
+    let staked_amount = stake_account.amount;
+    stake_account.update_rewards(reward_per_token, staked_amount);
     
     // Transfer tokens back to user
     let pool_key = pool.key();

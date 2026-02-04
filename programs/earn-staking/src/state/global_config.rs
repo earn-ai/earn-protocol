@@ -24,7 +24,7 @@ pub struct GlobalConfig {
     pub bump: u8,
     
     /// Reserved for future use
-    pub _reserved: [u8; 64],
+    pub _reserved: [u8; 32],
 }
 
 impl GlobalConfig {
@@ -35,5 +35,5 @@ impl GlobalConfig {
         8 +  // total_staked_value
         8 +  // total_rewards_distributed
         1 +  // bump
-        64;  // reserved
+        32;  // reserved
 }

@@ -55,7 +55,8 @@ pub fn handler(ctx: Context<Stake>, amount: u64) -> Result<()> {
     
     // Update rewards before modifying stake
     let reward_per_token = pool.reward_per_token();
-    stake_account.update_rewards(reward_per_token, stake_account.amount);
+    let staked_amount = stake_account.amount;
+    stake_account.update_rewards(reward_per_token, staked_amount);
     
     // Initialize stake account if new
     let is_new_staker = stake_account.amount == 0 && stake_account.owner == Pubkey::default();

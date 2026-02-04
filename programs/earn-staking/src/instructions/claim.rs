@@ -48,7 +48,8 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     
     // Update rewards
     let reward_per_token = pool.reward_per_token();
-    stake_account.update_rewards(reward_per_token, stake_account.amount);
+    let staked_amount = stake_account.amount;
+    stake_account.update_rewards(reward_per_token, staked_amount);
     
     let rewards_to_claim = stake_account.rewards_earned;
     
@@ -63,14 +64,7 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         StakingError::NoRewardsToClaim // Reuse error - vault is effectively empty
     );
     
-    // Transfer SOL rewards from vault to user using PDA signing
-    let pool_key = pool.key();
-    let seeds = &[
-        b"rewards-vault",
-        pool_key.as_ref(),
-        &[ctx.bumps.rewards_vault],
-    ];
-    
+    // Transfer SOL rewards from vault to user
     **ctx.accounts.rewards_vault.try_borrow_mut_lamports()? = vault_balance
         .checked_sub(rewards_to_claim)
         .ok_or(StakingError::Overflow)?;
