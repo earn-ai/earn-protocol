@@ -128,6 +128,20 @@ function isValidUrl(string: string): boolean {
   }
 }
 
+// Sanitize user input to prevent XSS/injection
+function sanitizeString(input: string): string {
+  return input
+    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, '') // Remove event handlers
+    .trim();
+}
+
+// Validate token name (alphanumeric, spaces, basic punctuation)
+function isValidTokenName(name: string): boolean {
+  return /^[a-zA-Z0-9\s\-_.!?']+$/.test(name);
+}
+
 function isBase64Image(string: string): boolean {
   return string.startsWith('data:image/') || /^[A-Za-z0-9+/=]+$/.test(string.slice(0, 100));
 }
@@ -495,11 +509,20 @@ app.post('/launch', rateLimit, async (req, res) => {
       });
     }
     
-    // Name validation
-    if (typeof name !== 'string' || name.length < 2 || name.length > 32) {
+    // Name validation and sanitization
+    const sanitizedName = sanitizeString(name);
+    if (typeof name !== 'string' || sanitizedName.length < 2 || sanitizedName.length > 32) {
       return res.status(400).json({
         success: false,
         error: 'Name must be 2-32 characters',
+        requestId,
+      });
+    }
+    
+    if (!isValidTokenName(sanitizedName)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name can only contain letters, numbers, spaces, and basic punctuation',
         requestId,
       });
     }
@@ -603,10 +626,10 @@ app.post('/launch', rateLimit, async (req, res) => {
       }
     }
     
-    // Build create instruction
+    // Build create instruction (use sanitized name)
     const createIx = await pumpSdk.createV2Instruction({
       mint: mintKeypair.publicKey,
-      name,
+      name: sanitizedName,
       symbol: ticker.toUpperCase(),
       uri,
       creator: earnWallet.publicKey,
@@ -668,11 +691,12 @@ app.post('/launch', rateLimit, async (req, res) => {
       throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
     }
     
-    // Store token config
+    // Store token config (use sanitized values)
     const preset = TOKENOMICS_PRESETS[tokenomics];
+    const sanitizedDescription = description ? sanitizeString(description) : undefined;
     const config: TokenConfig = {
       mint: mintKeypair.publicKey.toString(),
-      name,
+      name: sanitizedName,
       symbol: ticker.toUpperCase(),
       uri,
       agentWallet,
@@ -682,7 +706,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       stakingCutBps: preset.stakingCut * 100,
       createdAt: new Date().toISOString(),
       txSignature: signature,
-      description,
+      description: sanitizedDescription,
       website,
       twitter,
       launchNumber: tokenRegistry.size + 1,
@@ -700,7 +724,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       requestId,
       launchNumber: config.launchNumber,
       mint: mintKeypair.publicKey.toString(),
-      name,
+      name: sanitizedName,
       symbol: ticker.toUpperCase(),
       pumpfun: `https://pump.fun/${mintKeypair.publicKey.toString()}`,
       solscan: isDevnet

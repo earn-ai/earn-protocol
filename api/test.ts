@@ -171,6 +171,21 @@ async function runTests() {
     assert(res.success === false, 'Should reject invalid ticker');
   });
 
+  // Launch validation - invalid name characters
+  await test('POST /launch rejects invalid name characters', async () => {
+    const res = await fetchJson('/launch', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '<script>alert(1)</script>', // XSS attempt
+        ticker: 'TEST',
+        image: 'https://example.com/img.png',
+        tokenomics: 'degen',
+        agentWallet: 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ',
+      }),
+    });
+    assert(res.success === false, 'Should reject XSS in name');
+  });
+
   // Stake quote
   await test('POST /stake/quote validates input', async () => {
     const res = await fetchJson('/stake/quote', {
