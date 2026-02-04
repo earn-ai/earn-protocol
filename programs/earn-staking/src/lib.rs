@@ -35,7 +35,19 @@ pub mod earn_staking {
         instructions::stake::handler(ctx, amount)
     }
 
+    /// Request to unstake - starts cooldown period
+    /// Only needed if pool has cooldown > 0
+    pub fn request_unstake(ctx: Context<RequestUnstake>, amount: u64) -> Result<()> {
+        instructions::request_unstake::handler(ctx, amount)
+    }
+
+    /// Cancel a pending unstake request
+    pub fn cancel_unstake(ctx: Context<CancelUnstake>) -> Result<()> {
+        instructions::cancel_unstake::handler(ctx)
+    }
+
     /// Unstake tokens from a pool
+    /// If cooldown > 0, must call request_unstake first and wait
     pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
         instructions::unstake::handler(ctx, amount)
     }
