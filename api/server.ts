@@ -17,6 +17,7 @@ import cors from 'cors';
 import { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeBudgetProgram } from '@solana/web3.js';
 // PumpSdk loaded dynamically only on mainnet (has native deps that fail on serverless)
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
+import { StakingClient, getStakingPoolPDA, getStakeAccountPDA, STAKING_PROGRAM_ID } from './staking-client';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1007,151 +1008,344 @@ app.get('/tokenomics', (req, res) => {
 
 // ============ STAKING ENDPOINTS ============
 
-// Helper: Generate mock staking data for a token
-function generateStakingPool(token: TokenConfig) {
-  // Simulate based on token age and randomness seeded by mint
-  const seed = parseInt(token.mint.slice(0, 8), 16);
-  const random = (min: number, max: number) => min + (seed % (max - min));
-  
-  const totalStaked = random(1000, 100000) * 1e9; // lamports worth
-  const volume24h = random(5000, 200000); // USD
-  const stakingCut = token.stakingCutBps / 10000;
-  const dailyRewards = volume24h * 0.01 * stakingCut; // 1% fee * staking cut
-  const apy = totalStaked > 0 ? ((dailyRewards * 365) / (totalStaked / 1e9)) * 100 : 0;
-  
-  return {
-    mint: token.mint,
-    name: token.name,
-    symbol: token.symbol,
-    tokenomics: token.tokenomics,
-    stakingCut: `${token.stakingCutBps / 100}%`,
-    pool: {
-      totalStaked: totalStaked / 1e9,
-      totalStakedUsd: (totalStaked / 1e9) * 0.00001, // Mock price
-      stakerCount: random(10, 500),
-      rewardsAvailable: random(1, 50),
-      rewardsDistributed: random(10, 200),
-    },
-    stats: {
-      apy: Math.min(apy, 9999).toFixed(1) + '%',
-      volume24h: `$${volume24h.toLocaleString()}`,
-      dailyRewards: `${dailyRewards.toFixed(2)} SOL`,
-    },
-    stakingUrl: `https://earn.supply/stake/${token.mint}`,
-  };
+// Initialize staking client
+let stakingClient: StakingClient;
+try {
+  stakingClient = new StakingClient(connection);
+} catch (e) {
+  console.warn('⚠️ Staking client not initialized (connection may be missing)');
 }
 
-// Get all staking pools
-app.get('/stake/pools', (req, res) => {
-  const tokens = Array.from(tokenRegistry.values());
-  const pools = tokens.map(generateStakingPool);
-  
-  // Sort by APY descending
-  pools.sort((a, b) => parseFloat(b.stats.apy) - parseFloat(a.stats.apy));
-  
-  res.json({
-    success: true,
-    count: pools.length,
-    pools,
-    note: 'Mock data - on-chain staking coming soon',
-  });
+// Get global staking config
+app.get('/stake/config', async (req, res) => {
+  try {
+    const config = await stakingClient.getGlobalConfig();
+    if (!config) {
+      return res.json({
+        success: true,
+        initialized: false,
+        note: 'Global config not yet initialized',
+      });
+    }
+    res.json({
+      success: true,
+      initialized: true,
+      authority: config.authority.toString(),
+      earnWallet: config.earnWallet.toString(),
+      totalPools: config.totalPools.toString(),
+      totalStakedValue: config.totalStakedValue.toString(),
+      totalRewardsDistributed: (Number(config.totalRewardsDistributed) / 1e9).toFixed(4) + ' SOL',
+      programId: STAKING_PROGRAM_ID.toString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Get all staking pools (on-chain)
+app.get('/stake/pools', async (req, res) => {
+  try {
+    const pools = await stakingClient.getAllPools();
+    
+    // Enrich with token registry data if available
+    const enrichedPools = pools.map(({ pubkey, pool }) => {
+      const tokenConfig = tokenRegistry.get(pool.mint.toString());
+      return {
+        poolAddress: pubkey.toString(),
+        mint: pool.mint.toString(),
+        name: tokenConfig?.name || 'Unknown',
+        symbol: tokenConfig?.symbol || '???',
+        agentWallet: pool.agentWallet.toString(),
+        totalStaked: pool.totalStaked.toString(),
+        stakerCount: pool.stakerCount,
+        rewardsAvailable: (Number(pool.rewardsAvailable) / 1e9).toFixed(4) + ' SOL',
+        rewardsDistributed: (Number(pool.rewardsDistributed) / 1e9).toFixed(4) + ' SOL',
+        minStakeAmount: pool.minStakeAmount.toString(),
+        cooldownSeconds: pool.cooldownSeconds,
+        paused: pool.paused,
+        createdAt: new Date(Number(pool.createdAt) * 1000).toISOString(),
+        stakingUrl: `https://earn.supply/stake/${pool.mint.toString()}`,
+      };
+    });
+    
+    res.json({
+      success: true,
+      count: enrichedPools.length,
+      pools: enrichedPools,
+      programId: STAKING_PROGRAM_ID.toString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // Get specific staking pool
-app.get('/stake/pool/:mint', (req, res) => {
-  const token = tokenRegistry.get(req.params.mint);
-  if (!token) {
-    return res.status(404).json({ success: false, error: 'Token not found' });
-  }
-  
-  const pool = generateStakingPool(token);
-  res.json({
-    success: true,
-    ...pool,
-    note: 'Mock data - on-chain staking coming soon',
-  });
-});
-
-// Get user's staking positions
-app.get('/stake/user/:wallet', (req, res) => {
-  const wallet = req.params.wallet;
-  
-  // Validate wallet
+app.get('/stake/pool/:mint', async (req, res) => {
   try {
-    new PublicKey(wallet);
-  } catch {
-    return res.status(400).json({ success: false, error: 'Invalid wallet address' });
-  }
-  
-  // Generate mock positions for demo
-  const tokens = Array.from(tokenRegistry.values()).slice(0, 3); // First 3 tokens
-  const positions = tokens.map(token => {
-    const seed = parseInt(wallet.slice(0, 8), 16) + parseInt(token.mint.slice(0, 8), 16);
-    const stakedAmount = (seed % 10000) + 100;
-    const earnedRewards = (seed % 100) / 100;
+    const mint = new PublicKey(req.params.mint);
+    const pool = await stakingClient.getStakingPool(mint);
     
-    return {
-      mint: token.mint,
-      symbol: token.symbol,
-      stakedAmount,
-      stakedValueUsd: stakedAmount * 0.00001,
-      earnedRewards: earnedRewards.toFixed(4) + ' SOL',
-      earnedRewardsUsd: (earnedRewards * 100).toFixed(2),
-      stakedAt: new Date(Date.now() - (seed % 7) * 24 * 60 * 60 * 1000).toISOString(),
-    };
-  });
-  
-  const totalStakedUsd = positions.reduce((sum, p) => sum + p.stakedValueUsd, 0);
-  const totalEarned = positions.reduce((sum, p) => sum + parseFloat(p.earnedRewards), 0);
-  
-  res.json({
-    success: true,
-    wallet,
-    totalStakedUsd: `$${totalStakedUsd.toFixed(2)}`,
-    totalEarnedSol: `${totalEarned.toFixed(4)} SOL`,
-    positionCount: positions.length,
-    positions,
-    note: 'Mock data - on-chain staking coming soon',
-  });
+    if (!pool) {
+      // Check if pool just doesn't exist vs other error
+      const [poolPDA] = getStakingPoolPDA(mint);
+      return res.json({
+        success: true,
+        exists: false,
+        poolAddress: poolPDA.toString(),
+        mint: req.params.mint,
+        note: 'Pool not created yet. Use POST /stake/create-pool to create one.',
+      });
+    }
+    
+    const tokenConfig = tokenRegistry.get(req.params.mint);
+    const [poolPDA] = getStakingPoolPDA(mint);
+    
+    res.json({
+      success: true,
+      exists: true,
+      poolAddress: poolPDA.toString(),
+      mint: pool.mint.toString(),
+      name: tokenConfig?.name || 'Unknown',
+      symbol: tokenConfig?.symbol || '???',
+      agentWallet: pool.agentWallet.toString(),
+      totalStaked: pool.totalStaked.toString(),
+      stakerCount: pool.stakerCount,
+      rewardsAvailable: (Number(pool.rewardsAvailable) / 1e9).toFixed(4) + ' SOL',
+      rewardsDistributed: (Number(pool.rewardsDistributed) / 1e9).toFixed(4) + ' SOL',
+      minStakeAmount: pool.minStakeAmount.toString(),
+      cooldownSeconds: pool.cooldownSeconds,
+      paused: pool.paused,
+      createdAt: new Date(Number(pool.createdAt) * 1000).toISOString(),
+    });
+  } catch (e: any) {
+    if (e.message?.includes('Invalid public key')) {
+      return res.status(400).json({ success: false, error: 'Invalid mint address' });
+    }
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
-// Staking quote (preview stake/unstake)
-app.post('/stake/quote', (req, res) => {
-  const { mint, amount, action } = req.body;
-  
-  if (!mint || !amount || !action) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing required fields: mint, amount, action (stake/unstake)',
+// Get user's staking positions (on-chain)
+app.get('/stake/user/:wallet', async (req, res) => {
+  try {
+    const wallet = new PublicKey(req.params.wallet);
+    const stakes = await stakingClient.getUserStakes(wallet);
+    
+    // Enrich with pool and token data
+    const positions = await Promise.all(stakes.map(async ({ pubkey, stake }) => {
+      // Get pool data
+      const pool = await stakingClient.getStakingPool(stake.pool);
+      const tokenConfig = pool ? tokenRegistry.get(pool.mint.toString()) : null;
+      
+      return {
+        stakeAccountAddress: pubkey.toString(),
+        poolAddress: stake.pool.toString(),
+        mint: pool?.mint.toString() || 'unknown',
+        symbol: tokenConfig?.symbol || '???',
+        amount: stake.amount.toString(),
+        rewardsEarned: (Number(stake.rewardsEarned) / 1e9).toFixed(6) + ' SOL',
+        stakedAt: stake.stakedAt > 0 ? new Date(Number(stake.stakedAt) * 1000).toISOString() : null,
+        lastClaimAt: stake.lastClaimAt > 0 ? new Date(Number(stake.lastClaimAt) * 1000).toISOString() : null,
+        unstakeRequested: stake.unstakeRequestedAt > 0,
+        unstakeAmount: stake.unstakeAmount.toString(),
+      };
+    }));
+    
+    const totalEarned = stakes.reduce((sum, { stake }) => sum + Number(stake.rewardsEarned), 0);
+    
+    res.json({
+      success: true,
+      wallet: req.params.wallet,
+      positionCount: positions.length,
+      totalEarnedSol: (totalEarned / 1e9).toFixed(6) + ' SOL',
+      positions,
     });
+  } catch (e: any) {
+    if (e.message?.includes('Invalid public key')) {
+      return res.status(400).json({ success: false, error: 'Invalid wallet address' });
+    }
+    res.status(500).json({ success: false, error: e.message });
   }
-  
-  const token = tokenRegistry.get(mint);
-  if (!token) {
-    return res.status(404).json({ success: false, error: 'Token not found' });
+});
+
+// Create staking pool for a token (admin only)
+app.post('/stake/create-pool', async (req, res) => {
+  try {
+    const { mint, agentWallet, minStakeAmount, cooldownSeconds } = req.body;
+    
+    if (!mint) {
+      return res.status(400).json({ success: false, error: 'Missing required field: mint' });
+    }
+    
+    const mintPubkey = new PublicKey(mint);
+    const agentPubkey = agentWallet ? new PublicKey(agentWallet) : earnWallet.publicKey;
+    
+    // Check if pool already exists
+    const existing = await stakingClient.getStakingPool(mintPubkey);
+    if (existing) {
+      const [poolPDA] = getStakingPoolPDA(mintPubkey);
+      return res.status(400).json({
+        success: false,
+        error: 'Pool already exists',
+        poolAddress: poolPDA.toString(),
+      });
+    }
+    
+    // Build create pool transaction
+    const { transaction, poolPDA } = stakingClient.buildCreatePoolTx(
+      mintPubkey,
+      agentPubkey,
+      earnWallet.publicKey,
+      BigInt(minStakeAmount || 1000000),
+      cooldownSeconds || 0
+    );
+    
+    // Get recent blockhash and sign
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = earnWallet.publicKey;
+    transaction.sign(earnWallet);
+    
+    // Send transaction
+    const signature = await connection.sendRawTransaction(transaction.serialize(), {
+      skipPreflight: false,
+      maxRetries: 3,
+    });
+    
+    // Confirm
+    await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+    
+    res.json({
+      success: true,
+      poolAddress: poolPDA.toString(),
+      mint,
+      txSignature: signature,
+      explorer: `https://solscan.io/tx/${signature}?cluster=devnet`,
+    });
+  } catch (e: any) {
+    console.error('Create pool failed:', e);
+    res.status(500).json({ success: false, error: e.message });
   }
-  
-  const pool = generateStakingPool(token);
-  const apy = parseFloat(pool.stats.apy);
-  const dailyReturn = (amount * (apy / 100)) / 365;
-  
-  res.json({
-    success: true,
-    action,
-    mint,
-    amount,
-    pool: {
-      currentApy: pool.stats.apy,
-      totalStaked: pool.pool.totalStaked,
-    },
-    estimate: {
-      dailyRewards: `${dailyReturn.toFixed(6)} SOL`,
-      weeklyRewards: `${(dailyReturn * 7).toFixed(6)} SOL`,
-      monthlyRewards: `${(dailyReturn * 30).toFixed(6)} SOL`,
-    },
-    gasCost: '~0.00025 SOL',
-    note: 'Estimates based on current APY, actual returns may vary',
-  });
+});
+
+// Build stake transaction (returns unsigned tx for user to sign)
+app.post('/stake/tx/stake', async (req, res) => {
+  try {
+    const { mint, userWallet, amount } = req.body;
+    
+    if (!mint || !userWallet || !amount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: mint, userWallet, amount',
+      });
+    }
+    
+    const mintPubkey = new PublicKey(mint);
+    const userPubkey = new PublicKey(userWallet);
+    
+    // Check pool exists
+    const pool = await stakingClient.getStakingPool(mintPubkey);
+    if (!pool) {
+      return res.status(404).json({ success: false, error: 'Staking pool not found for this token' });
+    }
+    
+    // Build transaction
+    const { transaction, stakeAccountPDA } = stakingClient.buildStakeTx(
+      mintPubkey,
+      userPubkey,
+      BigInt(amount)
+    );
+    
+    // Add recent blockhash
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = userPubkey;
+    
+    // Serialize (unsigned)
+    const serialized = transaction.serialize({ requireAllSignatures: false }).toString('base64');
+    
+    res.json({
+      success: true,
+      transaction: serialized,
+      stakeAccountAddress: stakeAccountPDA.toString(),
+      mint,
+      amount,
+      note: 'Sign this transaction with your wallet to stake',
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Build unstake transaction
+app.post('/stake/tx/unstake', async (req, res) => {
+  try {
+    const { mint, userWallet, amount } = req.body;
+    
+    if (!mint || !userWallet || !amount) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: mint, userWallet, amount',
+      });
+    }
+    
+    const mintPubkey = new PublicKey(mint);
+    const userPubkey = new PublicKey(userWallet);
+    
+    // Build transaction
+    const transaction = stakingClient.buildUnstakeTx(mintPubkey, userPubkey, BigInt(amount));
+    
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = userPubkey;
+    
+    const serialized = transaction.serialize({ requireAllSignatures: false }).toString('base64');
+    
+    res.json({
+      success: true,
+      transaction: serialized,
+      mint,
+      amount,
+      note: 'Sign this transaction with your wallet to unstake',
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Build claim rewards transaction
+app.post('/stake/tx/claim', async (req, res) => {
+  try {
+    const { mint, userWallet } = req.body;
+    
+    if (!mint || !userWallet) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: mint, userWallet',
+      });
+    }
+    
+    const mintPubkey = new PublicKey(mint);
+    const userPubkey = new PublicKey(userWallet);
+    
+    // Build transaction
+    const transaction = stakingClient.buildClaimTx(mintPubkey, userPubkey);
+    
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = userPubkey;
+    
+    const serialized = transaction.serialize({ requireAllSignatures: false }).toString('base64');
+    
+    res.json({
+      success: true,
+      transaction: serialized,
+      mint,
+      note: 'Sign this transaction with your wallet to claim rewards',
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ============ END STAKING ============
