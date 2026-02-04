@@ -203,8 +203,21 @@ async function uploadToIPFS(
   return `https://ipfs.io/ipfs/${metadataCid}`;
 }
 
-// Calculate global stats
+// Calculate global stats with caching
+let statsCache: { stats: GlobalStats; tokenCount: number; cachedAt: number } | null = null;
+const STATS_CACHE_TTL_MS = 10000; // 10 second cache
+
 function calculateStats(): GlobalStats {
+  const now = Date.now();
+  const currentCount = tokenRegistry.size;
+  
+  // Return cached stats if still valid and token count unchanged
+  if (statsCache && 
+      now - statsCache.cachedAt < STATS_CACHE_TTL_MS && 
+      statsCache.tokenCount === currentCount) {
+    return statsCache.stats;
+  }
+  
   const tokens = Array.from(tokenRegistry.values());
   const agents = new Set(tokens.map(t => t.agentWallet));
   const byTokenomics: Record<string, number> = {};
@@ -213,7 +226,7 @@ function calculateStats(): GlobalStats {
     byTokenomics[token.tokenomics] = (byTokenomics[token.tokenomics] || 0) + 1;
   }
   
-  return {
+  const stats: GlobalStats = {
     totalLaunches: tokens.length,
     totalAgents: agents.size,
     launchesByTokenomics: byTokenomics,
@@ -221,11 +234,26 @@ function calculateStats(): GlobalStats {
       ? tokens.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
       : null,
   };
+  
+  // Cache the stats
+  statsCache = { stats, tokenCount: currentCount, cachedAt: now };
+  
+  return stats;
 }
 
 // ============ RATE LIMITING ============
 
 const rateLimitStore: Map<string, { count: number; resetAt: number }> = new Map();
+
+// Cleanup expired rate limit entries every 5 minutes to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitStore.entries()) {
+    if (now > record.resetAt) {
+      rateLimitStore.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);
 
 function rateLimit(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
@@ -672,10 +700,27 @@ app.post('/launch', rateLimit, async (req, res) => {
     });
     
   } catch (e: any) {
-    console.error(`❌ [${requestId}] Launch failed:`, e.message);
+    // Handle different error types robustly
+    let errorMessage: string;
+    if (e instanceof Error) {
+      errorMessage = e.message;
+    } else if (typeof e === 'string') {
+      errorMessage = e;
+    } else if (e && typeof e === 'object') {
+      errorMessage = e.message || e.error || JSON.stringify(e);
+    } else {
+      errorMessage = 'Unknown error occurred';
+    }
+    
+    // Check for common Solana errors
+    if (errorMessage.includes('0x1') || errorMessage.includes('insufficient')) {
+      errorMessage = 'Insufficient SOL balance. Airdrop SOL to the Earn wallet on devnet.';
+    }
+    
+    console.error(`❌ [${requestId}] Launch failed:`, errorMessage);
     res.status(500).json({
       success: false,
-      error: e.message,
+      error: errorMessage,
       requestId,
     });
   }

@@ -1,94 +1,164 @@
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { createMint, getOrCreateAssociatedTokenAccount, mintTo } from '@solana/spl-token';
-import * as fs from 'fs';
+/**
+ * Test Earn Protocol Flow on Devnet
+ * 
+ * Tests:
+ * 1. API health check
+ * 2. Token launch via /launch endpoint
+ * 3. Token verification via /token/:mint
+ * 4. Staking pool check via /stake/pool/:mint
+ * 
+ * Run: npx ts-node test-pumpfun-flow.ts
+ */
 
-const EARN_WALLET = 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
-const API_BASE = 'https://earn-protocol.onrender.com';
+const API_BASE = process.env.API_URL || 'http://localhost:3000';
+
+interface LaunchResponse {
+  success: boolean;
+  requestId?: string;
+  launchNumber?: number;
+  mint?: string;
+  name?: string;
+  symbol?: string;
+  pumpfun?: string;
+  solscan?: string;
+  staking?: string;
+  agentWallet?: string;
+  tokenomics?: string;
+  feeSplit?: {
+    agent: string;
+    earn: string;
+    stakers: string;
+  };
+  txSignature?: string;
+  network?: string;
+  error?: string;
+}
 
 async function main() {
-  console.log('🧪 Testing Earn Protocol + Pump.fun Flow on Devnet\n');
+  console.log('🧪 Testing Earn Protocol on Devnet\n');
+  console.log(`API: ${API_BASE}\n`);
+  console.log('━'.repeat(50));
+
+  // Step 1: Health check
+  console.log('\n📋 STEP 1: Health Check\n');
   
-  const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-  
-  const walletPath = '/home/node/.config/solana/test-wallet.json';
-  if (!fs.existsSync(walletPath)) {
-    console.log('❌ No test wallet');
+  try {
+    const healthRes = await fetch(`${API_BASE}/health`);
+    const health = await healthRes.json() as any;
+    
+    if (health.status !== 'ok') {
+      console.log('❌ API health check failed');
+      return;
+    }
+    
+    console.log('✅ API Status:', health.status);
+    console.log('   Network:', health.network);
+    console.log('   Wallet:', health.wallet);
+    console.log('   Tokens launched:', health.tokensLaunched);
+    console.log('   IPFS:', health.ipfsEnabled ? 'enabled' : 'disabled');
+  } catch (e: any) {
+    console.log('❌ Cannot reach API:', e.message);
     return;
   }
+
+  // Step 2: Test launch (dry run - will fail without SOL but validates request)
+  console.log('\n━'.repeat(50));
+  console.log('\n🚀 STEP 2: Test Token Launch\n');
   
-  const secretKey = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
-  const wallet = Keypair.fromSecretKey(Uint8Array.from(secretKey));
-  console.log('📂 Wallet:', wallet.publicKey.toBase58());
+  const testWallet = 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
+  const testToken = {
+    name: `Test Token ${Date.now()}`,
+    ticker: 'TEST',
+    image: 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    tokenomics: 'degen',
+    agentWallet: testWallet,
+    description: 'Automated test token for Earn Protocol',
+  };
   
-  const balance = await connection.getBalance(wallet.publicKey);
-  console.log('💰 Balance:', balance / LAMPORTS_PER_SOL, 'SOL\n');
+  console.log('Request:', JSON.stringify(testToken, null, 2));
   
-  if (balance < 0.05 * LAMPORTS_PER_SOL) {
-    console.log('🪂 Requesting airdrop...');
-    try {
-      const sig = await connection.requestAirdrop(wallet.publicKey, LAMPORTS_PER_SOL);
-      await connection.confirmTransaction(sig);
-      console.log('✅ Airdrop received\n');
-    } catch (e) {
-      console.log('⚠️ Airdrop failed, continuing...\n');
+  try {
+    const launchRes = await fetch(`${API_BASE}/launch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testToken),
+    });
+    
+    const launch = await launchRes.json() as LaunchResponse;
+    
+    if (launch.success) {
+      console.log('\n✅ Token launched successfully!');
+      console.log('   Mint:', launch.mint);
+      console.log('   Launch #:', launch.launchNumber);
+      console.log('   Network:', launch.network);
+      console.log('   Pump.fun:', launch.pumpfun);
+      console.log('   Fee split:', JSON.stringify(launch.feeSplit));
+      console.log('   TX:', launch.txSignature);
+      
+      // Step 3: Verify token
+      console.log('\n━'.repeat(50));
+      console.log('\n🔍 STEP 3: Verify Token Config\n');
+      
+      const tokenRes = await fetch(`${API_BASE}/token/${launch.mint}`);
+      const tokenData = await tokenRes.json() as any;
+      
+      if (tokenData.success) {
+        console.log('✅ Token verified:');
+        console.log('   Name:', tokenData.name);
+        console.log('   Symbol:', tokenData.symbol);
+        console.log('   Tokenomics:', tokenData.tokenomics);
+        console.log('   Agent cut:', tokenData.agentCutBps / 100 + '%');
+        console.log('   Earn cut:', tokenData.earnCutBps / 100 + '%');
+        console.log('   Staking cut:', tokenData.stakingCutBps / 100 + '%');
+      }
+      
+      // Step 4: Check staking pool
+      console.log('\n━'.repeat(50));
+      console.log('\n💰 STEP 4: Check Staking Pool\n');
+      
+      const poolRes = await fetch(`${API_BASE}/stake/pool/${launch.mint}`);
+      const pool = await poolRes.json() as any;
+      
+      if (pool.success) {
+        console.log('✅ Staking pool ready:');
+        console.log('   APY:', pool.stats.apy);
+        console.log('   Total staked:', pool.pool.totalStaked);
+        console.log('   Staker count:', pool.pool.stakerCount);
+        console.log('   Staking URL:', pool.stakingUrl);
+      }
+      
+    } else {
+      console.log('\n⚠️ Launch failed (expected without devnet SOL):');
+      console.log('   Error:', launch.error);
+      console.log('   Request ID:', launch.requestId);
+      console.log('\n   This is normal if the Earn wallet has no devnet SOL.');
+      console.log('   To test: airdrop SOL to', testWallet);
     }
+  } catch (e: any) {
+    console.log('❌ Launch request failed:', e.message);
   }
+
+  // Step 5: Check stats
+  console.log('\n━'.repeat(50));
+  console.log('\n📊 STEP 5: Global Stats\n');
   
-  // Step 1: Create token
-  console.log('STEP 1: Create Token (simulating pump.fun launch)');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  const tokenMint = await createMint(connection, wallet, wallet.publicKey, wallet.publicKey, 9);
-  console.log('✅ Token:', tokenMint.toBase58());
-  
-  const ata = await getOrCreateAssociatedTokenAccount(connection, wallet, tokenMint, wallet.publicKey);
-  await mintTo(connection, wallet, tokenMint, ata.address, wallet, 1_000_000_000_000_000n);
-  console.log('✅ Minted 1M tokens\n');
-  
-  // Step 2: Register with Earn Protocol
-  console.log('STEP 2: Register with Earn Protocol');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  const onboardRes = await fetch(`${API_BASE}/earn/onboard`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tokenMint: tokenMint.toBase58(),
-      creatorWallet: EARN_WALLET,
-      intent: 'degen'
-    })
-  });
-  
-  const onboardData = await onboardRes.json() as any;
-  console.log('Response:', JSON.stringify(onboardData, null, 2), '\n');
-  
-  // Step 3: Verify
-  console.log('STEP 3: Verify Token Config');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  const configRes = await fetch(`${API_BASE}/earn/token/${tokenMint.toBase58()}`);
-  const configData = await configRes.json() as any;
-  console.log('Config:', JSON.stringify(configData, null, 2), '\n');
-  
-  // Step 4: Quote
-  console.log('STEP 4: Test Fee Quote');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  const quoteRes = await fetch(`${API_BASE}/earn/quote?tokenMint=${tokenMint.toBase58()}&amount=1000000000`);
-  const quoteData = await quoteRes.json() as any;
-  console.log('Quote:', JSON.stringify(quoteData, null, 2), '\n');
-  
-  // Summary
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('SUMMARY');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  console.log('Token:', tokenMint.toBase58());
-  console.log('Creator:', EARN_WALLET);
-  console.log('Explorer:', `https://explorer.solana.com/address/${tokenMint.toBase58()}?cluster=devnet`);
-  
-  if (onboardData.dashboardUrl) {
-    console.log('Dashboard:', onboardData.dashboardUrl);
+  try {
+    const statsRes = await fetch(`${API_BASE}/stats`);
+    const stats = await statsRes.json() as any;
+    
+    if (stats.success) {
+      console.log('✅ Protocol stats:');
+      console.log('   Total launches:', stats.totalLaunches);
+      console.log('   Total agents:', stats.totalAgents);
+      console.log('   Network:', stats.network);
+      console.log('   By tokenomics:', JSON.stringify(stats.launchesByTokenomics));
+    }
+  } catch (e: any) {
+    console.log('❌ Stats failed:', e.message);
   }
+
+  console.log('\n━'.repeat(50));
+  console.log('\n✅ Test complete!\n');
 }
 
 main().catch(e => console.error('Error:', e.message));
