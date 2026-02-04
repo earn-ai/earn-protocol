@@ -401,8 +401,27 @@ curl https://api.earn.supply/stats
 // ============ APP ============
 
 const app = express();
-app.use(cors());
+
+// CORS configuration
+const CORS_ORIGINS = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : ['*']; // Allow all by default for development
+
+app.use(cors({
+  origin: CORS_ORIGINS.includes('*') ? true : CORS_ORIGINS,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-Admin-Key'],
+}));
+
 app.use(express.json({ limit: '10mb' }));
+
+// Request logging middleware for debugging
+app.use((req, res, next) => {
+  if (process.env.DEBUG_REQUESTS) {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  }
+  next();
+});
 
 // Load Earn wallet
 let earnWallet: Keypair;
@@ -1086,7 +1105,7 @@ app.use((req, res) => {
 
 // ============ START ============
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🚀 Earn Protocol API v1.1`);
   console.log(`   http://localhost:${PORT}`);
   console.log(`   Network: ${RPC_URL.includes('devnet') ? 'devnet' : 'mainnet'}`);
@@ -1103,3 +1122,26 @@ app.listen(PORT, () => {
   console.log(`   GET  /earnings/:w   - Agent earnings`);
   console.log(`   GET  /tokenomics    - Tokenomics presets`);
 });
+
+// Graceful shutdown
+const shutdown = (signal: string) => {
+  console.log(`\n📴 Received ${signal}, shutting down gracefully...`);
+  
+  // Save tokens before exit
+  saveTokens(tokenRegistry);
+  console.log(`   💾 Saved ${tokenRegistry.size} tokens`);
+  
+  server.close(() => {
+    console.log('   ✅ Server closed');
+    process.exit(0);
+  });
+  
+  // Force exit after 10s if still running
+  setTimeout(() => {
+    console.log('   ⚠️ Forcing exit');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
