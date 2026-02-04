@@ -26,6 +26,8 @@ import * as crypto from 'crypto';
 
 const PORT = process.env.PORT || 3000;
 const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
+const RPC_COMMITMENT = (process.env.RPC_COMMITMENT || 'confirmed') as 'confirmed' | 'finalized' | 'processed';
+const RPC_TIMEOUT_MS = parseInt(process.env.RPC_TIMEOUT_MS || '30000'); // 30s default
 const EARN_WALLET_PATH = process.env.EARN_WALLET || '/home/node/.config/solana/earn-wallet.json';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const TOKENS_FILE = path.join(DATA_DIR, 'tokens.json');
@@ -444,7 +446,10 @@ let pumpSdk: PumpSdk;
 
 try {
   earnWallet = loadKeypair(EARN_WALLET_PATH);
-  connection = new Connection(RPC_URL, 'confirmed');
+  connection = new Connection(RPC_URL, {
+    commitment: RPC_COMMITMENT,
+    confirmTransactionInitialTimeout: RPC_TIMEOUT_MS,
+  });
   pumpSdk = new PumpSdk();
   console.log('✅ Earn Wallet:', earnWallet.publicKey.toString());
   console.log('✅ Loaded', tokenRegistry.size, 'existing tokens');
