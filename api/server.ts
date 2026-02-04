@@ -45,6 +45,7 @@ interface TokenConfig {
   tokenomics: string;
   agentCutBps: number;
   earnCutBps: number;
+  stakingCutBps: number;
   createdAt: string;
   txSignature: string;
   description?: string;
@@ -95,11 +96,11 @@ const tokenRegistry: Map<string, TokenConfig> = loadTokens();
 
 // ============ TOKENOMICS ============
 
-const TOKENOMICS_PRESETS: Record<string, { agentCut: number; earnCut: number; description: string }> = {
-  degen: { agentCut: 50, earnCut: 50, description: 'High volume memes - 50/50 split' },
-  creator: { agentCut: 60, earnCut: 40, description: 'Content creators - 60% to you' },
-  community: { agentCut: 40, earnCut: 60, description: 'Long-term projects - community focused' },
-  lowfee: { agentCut: 50, earnCut: 50, description: 'Max trading volume - lowest fees' },
+const TOKENOMICS_PRESETS: Record<string, { agentCut: number; earnCut: number; stakingCut: number; description: string }> = {
+  degen: { agentCut: 40, earnCut: 30, stakingCut: 30, description: 'High volume memes - balanced split' },
+  creator: { agentCut: 50, earnCut: 25, stakingCut: 25, description: 'Content creators - max to you' },
+  community: { agentCut: 25, earnCut: 25, stakingCut: 50, description: 'DAO-style - stakers rewarded most' },
+  lowfee: { agentCut: 40, earnCut: 30, stakingCut: 30, description: 'Max trading volume - balanced' },
 };
 
 // ============ HELPERS ============
@@ -247,12 +248,14 @@ curl -X POST https://api.earn.supply/launch \\
 
 ## Tokenomics Styles
 
-| Style | Your Cut | Earn Cut | Best For |
-|-------|----------|----------|----------|
-| degen | 50% | 50% | High volume memes |
-| creator | 60% | 40% | Content creators |
-| community | 40% | 60% | Long-term projects |
-| lowfee | 50% | 50% | Max trading volume |
+| Style | You | Earn | Stakers | Best For |
+|-------|-----|------|---------|----------|
+| degen | 40% | 30% | 30% | High volume memes |
+| creator | 50% | 25% | 25% | Content creators |
+| community | 25% | 25% | 50% | DAO-style projects |
+| lowfee | 40% | 30% | 30% | Max trading volume |
+
+**Stakers** = People who stake your token on earn.supply/stake earn a portion of fees!
 
 ## Check Your Earnings
 
@@ -544,6 +547,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       tokenomics,
       agentCutBps: preset.agentCut * 100,
       earnCutBps: preset.earnCut * 100,
+      stakingCutBps: preset.stakingCut * 100,
       createdAt: new Date().toISOString(),
       txSignature: signature,
       description,
@@ -570,10 +574,14 @@ app.post('/launch', rateLimit, async (req, res) => {
       solscan: isDevnet
         ? `https://solscan.io/token/${mintKeypair.publicKey.toString()}?cluster=devnet`
         : `https://solscan.io/token/${mintKeypair.publicKey.toString()}`,
+      staking: `https://earn.supply/stake/${mintKeypair.publicKey.toString()}`,
       agentWallet,
       tokenomics,
-      agentCut: `${preset.agentCut}%`,
-      earnCut: `${preset.earnCut}%`,
+      feeSplit: {
+        agent: `${preset.agentCut}%`,
+        earn: `${preset.earnCut}%`,
+        stakers: `${preset.stakingCut}%`,
+      },
       txSignature: signature,
       network: isDevnet ? 'devnet' : 'mainnet',
     });
@@ -668,8 +676,10 @@ app.get('/tokenomics', (req, res) => {
       id: key,
       agentCut: `${value.agentCut}%`,
       earnCut: `${value.earnCut}%`,
+      stakingCut: `${value.stakingCut}%`,
       description: value.description,
     })),
+    note: 'Staking cut goes to token holders who stake on earn.supply/stake',
   });
 });
 
