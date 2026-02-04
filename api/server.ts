@@ -499,6 +499,13 @@ try {
 
 // Health check
 app.get('/health', (req, res) => {
+  if (!earnWallet) {
+    return res.status(503).json({
+      status: 'error',
+      error: 'Wallet not configured. Set EARN_WALLET_KEY environment variable (base58 private key).',
+      network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
+    });
+  }
   res.json({ 
     status: 'ok', 
     wallet: earnWallet.publicKey.toString(),
