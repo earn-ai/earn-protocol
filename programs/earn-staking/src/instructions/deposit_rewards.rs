@@ -55,9 +55,9 @@ pub fn handler(ctx: Context<DepositRewards>, amount: u64) -> Result<()> {
     if pool.total_staked > 0 {
         // Add to reward_per_token_stored
         // reward_per_token += amount * 1e18 / total_staked
-        let reward_increase = (amount as u128)
-            .checked_mul(1_000_000_000_000_000_000)
-            .unwrap()
+        // Use saturating arithmetic to prevent panics on overflow
+        let scaled_amount = (amount as u128).saturating_mul(1_000_000_000_000_000_000);
+        let reward_increase = scaled_amount
             .checked_div(pool.total_staked as u128)
             .unwrap_or(0);
         

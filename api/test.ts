@@ -30,7 +30,7 @@ async function test(name: string, fn: () => Promise<void>): Promise<void> {
   }
 }
 
-async function fetchJson(path: string, options?: RequestInit): Promise<any> {
+async function fetchJson(path: string, options?: RequestInit): Promise<{ success?: boolean; error?: string; [key: string]: any }> {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
@@ -55,7 +55,7 @@ async function runTests() {
   await test('GET /health returns ok', async () => {
     const res = await fetchJson('/health');
     assert(res.status === 'ok', `Expected status ok, got ${res.status}`);
-    assert(res.wallet, 'Missing wallet in response');
+    assert(!!res.wallet, 'Missing wallet in response');
   });
 
   // Skill.md
@@ -78,7 +78,7 @@ async function runTests() {
     const res = await fetchJson('/stats');
     assert(res.success === true, 'Expected success true');
     assert(typeof res.totalLaunches === 'number', 'Missing totalLaunches');
-    assert(res.earnWallet, 'Missing earnWallet');
+    assert(!!res.earnWallet, 'Missing earnWallet');
   });
 
   // Tokenomics endpoint
@@ -112,21 +112,21 @@ async function runTests() {
   await test('GET /earnings/invalid returns error', async () => {
     const res = await fetchJson('/earnings/invalid-wallet');
     assert(res.success === false, 'Should return success false');
-    assert(res.error, 'Should have error message');
+    assert(!!res.error, 'Should have error message');
   });
 
   // Valid wallet format for earnings (may have no tokens)
   await test('GET /earnings/:wallet accepts valid wallet', async () => {
     const res = await fetchJson('/earnings/EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ');
     assert(res.success === true, 'Expected success true');
-    assert(res.wallet, 'Should return wallet');
+    assert(!!res.wallet, 'Should return wallet');
   });
 
   // 404 for unknown routes
   await test('GET /unknown returns 404', async () => {
     const res = await fetch(`${API_URL}/unknown-route-xyz`);
     assert(res.status === 404, `Expected 404, got ${res.status}`);
-    const json = await res.json();
+    const json = await res.json() as { success?: boolean };
     assert(json.success === false, 'Should return success false');
   });
 
@@ -137,7 +137,7 @@ async function runTests() {
       body: JSON.stringify({ name: 'Test' }), // Missing other required fields
     });
     assert(res.success === false, 'Should reject incomplete request');
-    assert(res.error, 'Should have error message');
+    assert(!!res.error, 'Should have error message');
   });
 
   // Launch validation - invalid tokenomics

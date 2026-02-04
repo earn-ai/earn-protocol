@@ -54,7 +54,16 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
     
     require!(rewards_to_claim > 0, StakingError::NoRewardsToClaim);
     
-    // Transfer SOL rewards from vault to user
+    // Verify vault has sufficient balance (including rent-exemption)
+    let vault_balance = ctx.accounts.rewards_vault.lamports();
+    let rent = Rent::get()?;
+    let min_rent = rent.minimum_balance(0);
+    require!(
+        vault_balance >= rewards_to_claim.saturating_add(min_rent),
+        StakingError::NoRewardsToClaim // Reuse error - vault is effectively empty
+    );
+    
+    // Transfer SOL rewards from vault to user using PDA signing
     let pool_key = pool.key();
     let seeds = &[
         b"rewards-vault",
@@ -62,8 +71,12 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         &[ctx.bumps.rewards_vault],
     ];
     
-    **ctx.accounts.rewards_vault.try_borrow_mut_lamports()? -= rewards_to_claim;
-    **ctx.accounts.user.try_borrow_mut_lamports()? += rewards_to_claim;
+    **ctx.accounts.rewards_vault.try_borrow_mut_lamports()? = vault_balance
+        .checked_sub(rewards_to_claim)
+        .ok_or(StakingError::Overflow)?;
+    **ctx.accounts.user.try_borrow_mut_lamports()? = ctx.accounts.user.lamports()
+        .checked_add(rewards_to_claim)
+        .ok_or(StakingError::Overflow)?;
     
     // Update state
     stake_account.rewards_earned = 0;
