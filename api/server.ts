@@ -828,8 +828,7 @@ app.post('/launch', rateLimit, async (req, res) => {
     
     console.log(`   ✅ Token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
     
-    // Return success
-    const isDevnet = RPC_URL.includes('devnet');
+    // Return success (isDevnet already declared above)
     res.json({
       success: true,
       requestId,
