@@ -59,9 +59,9 @@ export function getRewardVaultPDA(pool: PublicKey): [PublicKey, number] {
 // ============ ACCOUNT SCHEMAS ============
 
 // Anchor discriminators (first 8 bytes of sha256("account:<Name>"))
-const GLOBAL_CONFIG_DISCRIMINATOR = Buffer.from([149, 8, 156, 202, 243, 60, 117, 20]);
-const STAKING_POOL_DISCRIMINATOR = Buffer.from([203, 169, 120, 69, 79, 106, 72, 213]);
-const STAKE_ACCOUNT_DISCRIMINATOR = Buffer.from([80, 158, 67, 124, 50, 188, 192, 155]);
+const GLOBAL_CONFIG_DISCRIMINATOR = Buffer.from([149, 8, 156, 202, 160, 252, 176, 217]);
+const STAKING_POOL_DISCRIMINATOR = Buffer.from([203, 19, 214, 220, 220, 154, 24, 102]);
+const STAKE_ACCOUNT_DISCRIMINATOR = Buffer.from([80, 158, 67, 124, 50, 189, 192, 255]);
 
 export interface GlobalConfig {
   authority: PublicKey;
@@ -208,9 +208,11 @@ export class StakingClient {
   
   async getAllPools(): Promise<{ pubkey: PublicKey; pool: StakingPool }[]> {
     // Fetch all accounts owned by the program with StakingPool discriminator
+    // Use bs58 encoding for the discriminator bytes
+    const bs58 = await import('bs58');
     const accounts = await this.connection.getProgramAccounts(STAKING_PROGRAM_ID, {
       filters: [
-        { memcmp: { offset: 0, bytes: STAKING_POOL_DISCRIMINATOR.toString('base64') } }
+        { memcmp: { offset: 0, bytes: bs58.default.encode(STAKING_POOL_DISCRIMINATOR) } }
       ]
     });
     
@@ -226,9 +228,10 @@ export class StakingClient {
   
   async getUserStakes(owner: PublicKey): Promise<{ pubkey: PublicKey; stake: StakeAccount }[]> {
     // Fetch all stake accounts for this owner
+    const bs58 = await import('bs58');
     const accounts = await this.connection.getProgramAccounts(STAKING_PROGRAM_ID, {
       filters: [
-        { memcmp: { offset: 0, bytes: STAKE_ACCOUNT_DISCRIMINATOR.toString('base64') } },
+        { memcmp: { offset: 0, bytes: bs58.default.encode(STAKE_ACCOUNT_DISCRIMINATOR) } },
         { memcmp: { offset: 8, bytes: owner.toBase58() } } // owner is at offset 8 after discriminator
       ]
     });
@@ -406,7 +409,7 @@ export class StakingClient {
     const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
     
     // Instruction data: [discriminator(8)] + [amount(8)]
-    const discriminator = Buffer.from([135, 136, 187, 90, 35, 19, 152, 33]); // request_unstake
+    const discriminator = Buffer.from([44, 154, 110, 253, 160, 202, 54, 34]); // request_unstake
     const data = Buffer.alloc(8 + 8);
     discriminator.copy(data, 0);
     data.writeBigUInt64LE(amount, 8);
