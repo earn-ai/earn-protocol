@@ -683,6 +683,157 @@ app.get('/tokenomics', (req, res) => {
   });
 });
 
+// ============ STAKING ENDPOINTS ============
+
+// Helper: Generate mock staking data for a token
+function generateStakingPool(token: TokenConfig) {
+  // Simulate based on token age and randomness seeded by mint
+  const seed = parseInt(token.mint.slice(0, 8), 16);
+  const random = (min: number, max: number) => min + (seed % (max - min));
+  
+  const totalStaked = random(1000, 100000) * 1e9; // lamports worth
+  const volume24h = random(5000, 200000); // USD
+  const stakingCut = token.stakingCutBps / 10000;
+  const dailyRewards = volume24h * 0.01 * stakingCut; // 1% fee * staking cut
+  const apy = totalStaked > 0 ? ((dailyRewards * 365) / (totalStaked / 1e9)) * 100 : 0;
+  
+  return {
+    mint: token.mint,
+    name: token.name,
+    symbol: token.symbol,
+    tokenomics: token.tokenomics,
+    stakingCut: `${token.stakingCutBps / 100}%`,
+    pool: {
+      totalStaked: totalStaked / 1e9,
+      totalStakedUsd: (totalStaked / 1e9) * 0.00001, // Mock price
+      stakerCount: random(10, 500),
+      rewardsAvailable: random(1, 50),
+      rewardsDistributed: random(10, 200),
+    },
+    stats: {
+      apy: Math.min(apy, 9999).toFixed(1) + '%',
+      volume24h: `$${volume24h.toLocaleString()}`,
+      dailyRewards: `${dailyRewards.toFixed(2)} SOL`,
+    },
+    stakingUrl: `https://earn.supply/stake/${token.mint}`,
+  };
+}
+
+// Get all staking pools
+app.get('/stake/pools', (req, res) => {
+  const tokens = Array.from(tokenRegistry.values());
+  const pools = tokens.map(generateStakingPool);
+  
+  // Sort by APY descending
+  pools.sort((a, b) => parseFloat(b.stats.apy) - parseFloat(a.stats.apy));
+  
+  res.json({
+    success: true,
+    count: pools.length,
+    pools,
+    note: 'Mock data - on-chain staking coming soon',
+  });
+});
+
+// Get specific staking pool
+app.get('/stake/pool/:mint', (req, res) => {
+  const token = tokenRegistry.get(req.params.mint);
+  if (!token) {
+    return res.status(404).json({ success: false, error: 'Token not found' });
+  }
+  
+  const pool = generateStakingPool(token);
+  res.json({
+    success: true,
+    ...pool,
+    note: 'Mock data - on-chain staking coming soon',
+  });
+});
+
+// Get user's staking positions
+app.get('/stake/user/:wallet', (req, res) => {
+  const wallet = req.params.wallet;
+  
+  // Validate wallet
+  try {
+    new PublicKey(wallet);
+  } catch {
+    return res.status(400).json({ success: false, error: 'Invalid wallet address' });
+  }
+  
+  // Generate mock positions for demo
+  const tokens = Array.from(tokenRegistry.values()).slice(0, 3); // First 3 tokens
+  const positions = tokens.map(token => {
+    const seed = parseInt(wallet.slice(0, 8), 16) + parseInt(token.mint.slice(0, 8), 16);
+    const stakedAmount = (seed % 10000) + 100;
+    const earnedRewards = (seed % 100) / 100;
+    
+    return {
+      mint: token.mint,
+      symbol: token.symbol,
+      stakedAmount,
+      stakedValueUsd: stakedAmount * 0.00001,
+      earnedRewards: earnedRewards.toFixed(4) + ' SOL',
+      earnedRewardsUsd: (earnedRewards * 100).toFixed(2),
+      stakedAt: new Date(Date.now() - (seed % 7) * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  });
+  
+  const totalStakedUsd = positions.reduce((sum, p) => sum + p.stakedValueUsd, 0);
+  const totalEarned = positions.reduce((sum, p) => sum + parseFloat(p.earnedRewards), 0);
+  
+  res.json({
+    success: true,
+    wallet,
+    totalStakedUsd: `$${totalStakedUsd.toFixed(2)}`,
+    totalEarnedSol: `${totalEarned.toFixed(4)} SOL`,
+    positionCount: positions.length,
+    positions,
+    note: 'Mock data - on-chain staking coming soon',
+  });
+});
+
+// Staking quote (preview stake/unstake)
+app.post('/stake/quote', (req, res) => {
+  const { mint, amount, action } = req.body;
+  
+  if (!mint || !amount || !action) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: mint, amount, action (stake/unstake)',
+    });
+  }
+  
+  const token = tokenRegistry.get(mint);
+  if (!token) {
+    return res.status(404).json({ success: false, error: 'Token not found' });
+  }
+  
+  const pool = generateStakingPool(token);
+  const apy = parseFloat(pool.stats.apy);
+  const dailyReturn = (amount * (apy / 100)) / 365;
+  
+  res.json({
+    success: true,
+    action,
+    mint,
+    amount,
+    pool: {
+      currentApy: pool.stats.apy,
+      totalStaked: pool.pool.totalStaked,
+    },
+    estimate: {
+      dailyRewards: `${dailyReturn.toFixed(6)} SOL`,
+      weeklyRewards: `${(dailyReturn * 7).toFixed(6)} SOL`,
+      monthlyRewards: `${(dailyReturn * 30).toFixed(6)} SOL`,
+    },
+    gasCost: '~0.00025 SOL',
+    note: 'Estimates based on current APY, actual returns may vary',
+  });
+});
+
+// ============ END STAKING ============
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
