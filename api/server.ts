@@ -30,6 +30,10 @@ const EARN_WALLET_PATH = process.env.EARN_WALLET || '/home/node/.config/solana/e
 const DATA_DIR = process.env.DATA_DIR || './data';
 const TOKENS_FILE = path.join(DATA_DIR, 'tokens.json');
 
+// IPFS config (optional - enables base64 image uploads)
+const NFT_STORAGE_KEY = process.env.NFT_STORAGE_KEY || '';
+const IPFS_ENABLED = !!NFT_STORAGE_KEY;
+
 // Rate limiting config
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 10; // per window
@@ -130,6 +134,73 @@ function isBase64Image(string: string): boolean {
 
 function generateRequestId(): string {
   return crypto.randomBytes(8).toString('hex');
+}
+
+// ============ IPFS UPLOAD ============
+
+interface MetadataJson {
+  name: string;
+  symbol: string;
+  description?: string;
+  image: string;
+  external_url?: string;
+  attributes?: Array<{ trait_type: string; value: string }>;
+}
+
+async function uploadToIPFS(
+  imageBase64: string,
+  metadata: { name: string; symbol: string; description?: string; website?: string }
+): Promise<string> {
+  if (!IPFS_ENABLED) {
+    throw new Error('IPFS upload not configured. Set NFT_STORAGE_KEY env var.');
+  }
+  
+  // Dynamic import for nft.storage
+  const { NFTStorage, File } = await import('nft.storage');
+  const client = new NFTStorage({ token: NFT_STORAGE_KEY });
+  
+  // Parse base64 image
+  let imageBuffer: Buffer;
+  let mimeType = 'image/png';
+  
+  if (imageBase64.startsWith('data:')) {
+    // data:image/png;base64,xxxx format
+    const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) throw new Error('Invalid base64 data URL format');
+    mimeType = matches[1];
+    imageBuffer = Buffer.from(matches[2], 'base64');
+  } else {
+    // Raw base64
+    imageBuffer = Buffer.from(imageBase64, 'base64');
+  }
+  
+  // Upload image
+  const imageFile = new File([imageBuffer], `image.${mimeType.split('/')[1]}`, { type: mimeType });
+  const imageCid = await client.storeBlob(imageFile);
+  const imageUrl = `https://ipfs.io/ipfs/${imageCid}`;
+  
+  // Create metadata JSON
+  const metadataJson: MetadataJson = {
+    name: metadata.name,
+    symbol: metadata.symbol,
+    description: metadata.description || `${metadata.name} - Launched via Earn Protocol`,
+    image: imageUrl,
+    external_url: metadata.website || 'https://earn.supply',
+    attributes: [
+      { trait_type: 'Launched By', value: 'Earn Protocol' },
+      { trait_type: 'Platform', value: 'Pump.fun' },
+    ],
+  };
+  
+  // Upload metadata
+  const metadataFile = new File(
+    [JSON.stringify(metadataJson, null, 2)],
+    'metadata.json',
+    { type: 'application/json' }
+  );
+  const metadataCid = await client.storeBlob(metadataFile);
+  
+  return `https://ipfs.io/ipfs/${metadataCid}`;
 }
 
 // Calculate global stats
@@ -316,6 +387,7 @@ try {
   pumpSdk = new PumpSdk();
   console.log('✅ Earn Wallet:', earnWallet.publicKey.toString());
   console.log('✅ Loaded', tokenRegistry.size, 'existing tokens');
+  console.log(IPFS_ENABLED ? '✅ IPFS uploads enabled' : '⚠️ IPFS disabled (set NFT_STORAGE_KEY to enable)');
 } catch (e: any) {
   console.error('❌ Failed to load wallet:', e.message);
   process.exit(1);
@@ -330,6 +402,7 @@ app.get('/health', (req, res) => {
     wallet: earnWallet.publicKey.toString(),
     network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
     tokensLaunched: tokenRegistry.size,
+    ipfsEnabled: IPFS_ENABLED,
   });
 });
 
@@ -457,18 +530,30 @@ app.post('/launch', rateLimit, async (req, res) => {
     // Generate mint keypair
     const mintKeypair = Keypair.generate();
     
-    // TODO: If base64 image, upload to IPFS first
-    // For now, use image URL directly
+    // Handle image: URL or base64
     let uri = image;
     if (isBase64Image(image)) {
-      console.log(`   ⚠️ Base64 image provided - IPFS upload not yet implemented`);
-      // In production: upload to IPFS, create metadata JSON, get URI
-      // For now, reject base64
-      return res.status(400).json({
-        success: false,
-        error: 'Base64 images not yet supported. Please provide an image URL.',
-        requestId,
-      });
+      if (!IPFS_ENABLED) {
+        return res.status(400).json({
+          success: false,
+          error: 'Base64 images require IPFS to be configured. Please provide an image URL instead.',
+          hint: 'Server admin: Set NFT_STORAGE_KEY env var to enable IPFS uploads',
+          requestId,
+        });
+      }
+      
+      console.log(`   📤 Uploading image to IPFS...`);
+      try {
+        uri = await uploadToIPFS(image, { name, symbol: ticker.toUpperCase(), description, website });
+        console.log(`   ✅ IPFS URI: ${uri}`);
+      } catch (ipfsError: any) {
+        console.error(`   ❌ IPFS upload failed:`, ipfsError.message);
+        return res.status(500).json({
+          success: false,
+          error: `IPFS upload failed: ${ipfsError.message}`,
+          requestId,
+        });
+      }
     }
     
     // Build create instruction
