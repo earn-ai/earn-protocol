@@ -69,13 +69,24 @@ interface GlobalStats {
 
 // ============ PERSISTENCE ============
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Check if running on Vercel (serverless - read-only filesystem)
+const IS_SERVERLESS = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
+// Ensure data directory exists (skip on serverless)
+if (!IS_SERVERLESS && !fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.warn('⚠️ Could not create data directory (may be serverless):', e);
+  }
 }
 
-// Load tokens from file
+// Load tokens from file (returns empty on serverless)
 function loadTokens(): Map<string, TokenConfig> {
+  if (IS_SERVERLESS) {
+    console.log('📦 Serverless mode: using in-memory storage');
+    return new Map();
+  }
   try {
     if (fs.existsSync(TOKENS_FILE)) {
       const data = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf-8'));
@@ -87,8 +98,9 @@ function loadTokens(): Map<string, TokenConfig> {
   return new Map();
 }
 
-// Save tokens to file
+// Save tokens to file (no-op on serverless)
 function saveTokens(tokens: Map<string, TokenConfig>): void {
+  if (IS_SERVERLESS) return; // Serverless has no persistent filesystem
   try {
     const data = Object.fromEntries(tokens);
     fs.writeFileSync(TOKENS_FILE, JSON.stringify(data, null, 2));
@@ -119,6 +131,18 @@ function loadKeypair(filepath: string): Keypair {
     return Keypair.fromSecretKey(bs58.decode(data.private_key));
   }
   throw new Error('Unknown wallet format');
+}
+
+// Load keypair from environment variable (base58 private key)
+function loadKeypairFromEnv(envKey: string): Keypair | null {
+  const key = process.env[envKey];
+  if (!key) return null;
+  try {
+    return Keypair.fromSecretKey(bs58.decode(key));
+  } catch (e) {
+    console.error(`Failed to decode ${envKey}:`, e);
+    return null;
+  }
 }
 
 function isValidUrl(string: string): boolean {
@@ -445,7 +469,18 @@ let connection: Connection;
 let pumpSdk: PumpSdk;
 
 try {
-  earnWallet = loadKeypair(EARN_WALLET_PATH);
+  // Try loading from environment variable first (for serverless), then file
+  const envWallet = loadKeypairFromEnv('EARN_WALLET_KEY');
+  if (envWallet) {
+    earnWallet = envWallet;
+    console.log('✅ Earn Wallet loaded from EARN_WALLET_KEY env var');
+  } else if (!IS_SERVERLESS) {
+    earnWallet = loadKeypair(EARN_WALLET_PATH);
+    console.log('✅ Earn Wallet loaded from file');
+  } else {
+    throw new Error('No wallet configured. Set EARN_WALLET_KEY environment variable (base58 private key)');
+  }
+  
   connection = new Connection(RPC_URL, {
     commitment: RPC_COMMITMENT,
     confirmTransactionInitialTimeout: RPC_TIMEOUT_MS,
@@ -456,7 +491,8 @@ try {
   console.log(IPFS_ENABLED ? '✅ IPFS uploads enabled' : '⚠️ IPFS disabled (set NFT_STORAGE_KEY to enable)');
 } catch (e: any) {
   console.error('❌ Failed to load wallet:', e.message);
-  process.exit(1);
+  if (!IS_SERVERLESS) process.exit(1);
+  // On serverless, we'll fail gracefully on requests that need the wallet
 }
 
 // ============ ROUTES ============
