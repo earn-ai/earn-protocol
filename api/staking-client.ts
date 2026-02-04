@@ -303,17 +303,19 @@ export class StakingClient {
   
   /**
    * Build stake transaction
-   * Note: Requires pool_token_account to be initialized first
+   * Automatically derives pool token account (ATA of pool authority)
    */
   buildStakeTx(
     mint: PublicKey,
     owner: PublicKey,
-    amount: bigint,
-    poolTokenAccount: PublicKey // The pool's token account to receive staked tokens
-  ): { transaction: Transaction; stakeAccountPDA: PublicKey } {
+    amount: bigint
+  ): { transaction: Transaction; stakeAccountPDA: PublicKey; poolTokenAccount: PublicKey } {
     const [poolPDA] = getStakingPoolPDA(mint);
     const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
+    const [poolAuthority] = getPoolAuthorityPDA(poolPDA);
     
+    // Pool token account is the ATA of the pool authority for this mint
+    const poolTokenAccount = getAssociatedTokenAddressSync(mint, poolAuthority, true); // allowOwnerOffCurve=true for PDA
     const userTokenAccount = getAssociatedTokenAddressSync(mint, owner);
     
     // Instruction data: [discriminator(8)] + [amount(8)]
@@ -345,23 +347,24 @@ export class StakingClient {
     });
     
     const transaction = new Transaction().add(ix);
-    return { transaction, stakeAccountPDA };
+    return { transaction, stakeAccountPDA, poolTokenAccount };
   }
   
   /**
    * Build unstake transaction (no cooldown or after cooldown)
-   * Note: Requires pool_token_account to exist
+   * Automatically derives pool token account (ATA of pool authority)
    */
   buildUnstakeTx(
     mint: PublicKey,
     owner: PublicKey,
-    amount: bigint,
-    poolTokenAccount: PublicKey // The pool's token account holding staked tokens
+    amount: bigint
   ): Transaction {
     const [poolPDA] = getStakingPoolPDA(mint);
     const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
     const [poolAuthority] = getPoolAuthorityPDA(poolPDA);
     
+    // Pool token account is the ATA of the pool authority for this mint
+    const poolTokenAccount = getAssociatedTokenAddressSync(mint, poolAuthority, true);
     const userTokenAccount = getAssociatedTokenAddressSync(mint, owner);
     
     // Instruction data: [discriminator(8)] + [amount(8)]
