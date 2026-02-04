@@ -14,6 +14,9 @@ pub enum StakingError {
     #[msg("No rewards to claim")]
     NoRewardsToClaim,
     
+    #[msg("Insufficient rewards in vault")]
+    InsufficientRewards,
+    
     #[msg("Pool is paused")]
     PoolPaused,
     
