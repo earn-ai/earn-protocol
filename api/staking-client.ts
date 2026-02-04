@@ -17,7 +17,8 @@ const GLOBAL_CONFIG_SEED = 'global-config';
 const STAKING_POOL_SEED = 'staking-pool';
 const STAKE_ACCOUNT_SEED = 'stake-account';
 const POOL_TOKEN_ACCOUNT_SEED = 'pool-token-account';
-const REWARD_VAULT_SEED = 'reward-vault';
+const REWARD_VAULT_SEED = 'rewards-vault';
+const POOL_AUTHORITY_SEED = 'pool-authority';
 
 // ============ PDA DERIVATION ============
 
@@ -52,6 +53,13 @@ export function getPoolTokenAccountPDA(pool: PublicKey): [PublicKey, number] {
 export function getRewardVaultPDA(pool: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from(REWARD_VAULT_SEED), pool.toBuffer()],
+    STAKING_PROGRAM_ID
+  );
+}
+
+export function getPoolAuthorityPDA(pool: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(POOL_AUTHORITY_SEED), pool.toBuffer()],
     STAKING_PROGRAM_ID
   );
 }
@@ -260,8 +268,6 @@ export class StakingClient {
   ): { transaction: Transaction; poolPDA: PublicKey } {
     const [globalConfig] = getGlobalConfigPDA();
     const [poolPDA, poolBump] = getStakingPoolPDA(mint);
-    const [poolTokenAccount] = getPoolTokenAccountPDA(poolPDA);
-    const [rewardVault] = getRewardVaultPDA(poolPDA);
     
     // Instruction data: [discriminator(8)] + [min_stake_amount(8)] + [cooldown_seconds(4)]
     // Anchor discriminator for "create_pool": sha256("global:create_pool")[0..8]
@@ -271,18 +277,22 @@ export class StakingClient {
     data.writeBigUInt64LE(minStakeAmount, 8);
     data.writeUInt32LE(cooldownSeconds, 16);
     
+    // Account order must match Anchor's CreatePool struct:
+    // 1. global_config (mut)
+    // 2. staking_pool (init, mut)
+    // 3. mint
+    // 4. agent_wallet
+    // 5. authority (signer, mut)
+    // 6. system_program
     const ix = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
       keys: [
-        { pubkey: authority, isSigner: true, isWritable: true },
         { pubkey: globalConfig, isSigner: false, isWritable: true },
         { pubkey: poolPDA, isSigner: false, isWritable: true },
         { pubkey: mint, isSigner: false, isWritable: false },
         { pubkey: agentWallet, isSigner: false, isWritable: false },
-        { pubkey: poolTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: rewardVault, isSigner: false, isWritable: true },
+        { pubkey: authority, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       ],
       data,
     });
@@ -293,15 +303,16 @@ export class StakingClient {
   
   /**
    * Build stake transaction
+   * Note: Requires pool_token_account to be initialized first
    */
   buildStakeTx(
     mint: PublicKey,
     owner: PublicKey,
-    amount: bigint
+    amount: bigint,
+    poolTokenAccount: PublicKey // The pool's token account to receive staked tokens
   ): { transaction: Transaction; stakeAccountPDA: PublicKey } {
     const [poolPDA] = getStakingPoolPDA(mint);
-    const [stakeAccountPDA, stakeBump] = getStakeAccountPDA(poolPDA, owner);
-    const [poolTokenAccount] = getPoolTokenAccountPDA(poolPDA);
+    const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
     
     const userTokenAccount = getAssociatedTokenAddressSync(mint, owner);
     
@@ -311,17 +322,24 @@ export class StakingClient {
     discriminator.copy(data, 0);
     data.writeBigUInt64LE(amount, 8);
     
+    // Account order must match Anchor's Stake struct:
+    // 1. staking_pool (mut)
+    // 2. stake_account (init_if_needed, mut)
+    // 3. user_token_account (mut)
+    // 4. pool_token_account (mut)
+    // 5. user (signer, mut)
+    // 6. token_program
+    // 7. system_program
     const ix = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
       keys: [
-        { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: poolPDA, isSigner: false, isWritable: true },
         { pubkey: stakeAccountPDA, isSigner: false, isWritable: true },
-        { pubkey: mint, isSigner: false, isWritable: false },
         { pubkey: userTokenAccount, isSigner: false, isWritable: true },
         { pubkey: poolTokenAccount, isSigner: false, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data,
     });
@@ -332,15 +350,17 @@ export class StakingClient {
   
   /**
    * Build unstake transaction (no cooldown or after cooldown)
+   * Note: Requires pool_token_account to exist
    */
   buildUnstakeTx(
     mint: PublicKey,
     owner: PublicKey,
-    amount: bigint
+    amount: bigint,
+    poolTokenAccount: PublicKey // The pool's token account holding staked tokens
   ): Transaction {
     const [poolPDA] = getStakingPoolPDA(mint);
     const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
-    const [poolTokenAccount] = getPoolTokenAccountPDA(poolPDA);
+    const [poolAuthority] = getPoolAuthorityPDA(poolPDA);
     
     const userTokenAccount = getAssociatedTokenAddressSync(mint, owner);
     
@@ -350,15 +370,23 @@ export class StakingClient {
     discriminator.copy(data, 0);
     data.writeBigUInt64LE(amount, 8);
     
+    // Account order must match Anchor's Unstake struct:
+    // 1. staking_pool (mut)
+    // 2. stake_account (mut)
+    // 3. user_token_account (mut)
+    // 4. pool_token_account (mut)
+    // 5. pool_authority (PDA)
+    // 6. user (signer, mut)
+    // 7. token_program
     const ix = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
       keys: [
-        { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: poolPDA, isSigner: false, isWritable: true },
         { pubkey: stakeAccountPDA, isSigner: false, isWritable: true },
-        { pubkey: mint, isSigner: false, isWritable: false },
         { pubkey: userTokenAccount, isSigner: false, isWritable: true },
         { pubkey: poolTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: poolAuthority, isSigner: false, isWritable: false },
+        { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       ],
       data,
@@ -374,21 +402,30 @@ export class StakingClient {
     mint: PublicKey,
     owner: PublicKey
   ): Transaction {
+    const [globalConfig] = getGlobalConfigPDA();
     const [poolPDA] = getStakingPoolPDA(mint);
     const [stakeAccountPDA] = getStakeAccountPDA(poolPDA, owner);
-    const [rewardVault] = getRewardVaultPDA(poolPDA);
+    const [rewardsVault] = getRewardVaultPDA(poolPDA);
     
     // Instruction data: [discriminator(8)]
     const discriminator = Buffer.from([4, 144, 132, 71, 116, 23, 151, 80]); // claim_rewards
     const data = discriminator;
     
+    // Account order must match Anchor's ClaimRewards struct:
+    // 1. global_config (mut)
+    // 2. staking_pool (mut)
+    // 3. stake_account (mut)
+    // 4. rewards_vault (mut, PDA)
+    // 5. user (signer, mut)
+    // 6. system_program
     const ix = new TransactionInstruction({
       programId: STAKING_PROGRAM_ID,
       keys: [
-        { pubkey: owner, isSigner: true, isWritable: true },
+        { pubkey: globalConfig, isSigner: false, isWritable: true },
         { pubkey: poolPDA, isSigner: false, isWritable: true },
         { pubkey: stakeAccountPDA, isSigner: false, isWritable: true },
-        { pubkey: rewardVault, isSigner: false, isWritable: true },
+        { pubkey: rewardsVault, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: true, isWritable: true },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
       ],
       data,
