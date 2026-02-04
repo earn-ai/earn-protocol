@@ -15,7 +15,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeBudgetProgram } from '@solana/web3.js';
-import { PumpSdk, bondingCurvePda, creatorVaultPda } from '@pump-fun/pump-sdk';
+// PumpSdk loaded dynamically only on mainnet (has native deps that fail on serverless)
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import bs58 from 'bs58';
 import * as fs from 'fs';
@@ -466,7 +466,6 @@ app.use((req, res, next) => {
 // Load Earn wallet
 let earnWallet: Keypair;
 let connection: Connection;
-let pumpSdk: PumpSdk;
 
 try {
   // Try loading from environment variable first (for serverless), then file
@@ -485,7 +484,7 @@ try {
     commitment: RPC_COMMITMENT,
     confirmTransactionInitialTimeout: RPC_TIMEOUT_MS,
   });
-  pumpSdk = new PumpSdk();
+  // PumpSdk loaded dynamically only when needed (mainnet launches)
   console.log('✅ Earn Wallet:', earnWallet.publicKey.toString());
   console.log('✅ Loaded', tokenRegistry.size, 'existing tokens');
   console.log(IPFS_ENABLED ? '✅ IPFS uploads enabled' : '⚠️ IPFS disabled (set NFT_STORAGE_KEY to enable)');
@@ -707,6 +706,10 @@ app.post('/launch', rateLimit, async (req, res) => {
     }
     
     // ========== MAINNET REAL LAUNCH ==========
+    
+    // Dynamically import PumpSdk (only needed for mainnet, has native deps)
+    const { PumpSdk, bondingCurvePda } = await import('@pump-fun/pump-sdk');
+    const pumpSdk = new PumpSdk();
     
     // Handle image: URL or base64
     let uri = image;
