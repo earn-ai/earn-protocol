@@ -641,12 +641,72 @@ app.post('/launch', rateLimit, async (req, res) => {
     
     // ========== LAUNCH ==========
     
+    const isDevnet = RPC_URL.includes('devnet');
+    
     console.log(`\n🚀 [${requestId}] Launching: ${name} (${ticker.toUpperCase()})`);
     console.log(`   Agent: ${agentWallet}`);
     console.log(`   Tokenomics: ${tokenomics}`);
+    console.log(`   Network: ${isDevnet ? 'devnet (mock)' : 'mainnet'}`);
     
     // Generate mint keypair
     const mintKeypair = Keypair.generate();
+    
+    // ========== DEVNET MOCK MODE ==========
+    // Pump.fun doesn't exist on devnet, so we simulate the launch
+    if (isDevnet) {
+      console.log(`   🧪 Devnet mock mode - simulating launch`);
+      
+      // Store token config
+      const preset = TOKENOMICS_PRESETS[tokenomics];
+      const sanitizedDescription = description ? sanitizeString(description) : undefined;
+      const config: TokenConfig = {
+        mint: mintKeypair.publicKey.toString(),
+        name: sanitizedName,
+        symbol: ticker.toUpperCase(),
+        uri: image, // Use original image URL for mock
+        agentWallet,
+        tokenomics,
+        agentCutBps: preset.agentCut * 100,
+        earnCutBps: preset.earnCut * 100,
+        stakingCutBps: preset.stakingCut * 100,
+        createdAt: new Date().toISOString(),
+        txSignature: 'mock_' + requestId, // Mock signature
+        description: sanitizedDescription,
+        website,
+        twitter,
+        launchNumber: tokenRegistry.size + 1,
+      };
+      
+      tokenRegistry.set(mintKeypair.publicKey.toString(), config);
+      saveTokens(tokenRegistry);
+      
+      console.log(`   ✅ Mock token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
+      
+      return res.json({
+        success: true,
+        requestId,
+        launchNumber: config.launchNumber,
+        mint: mintKeypair.publicKey.toString(),
+        name: sanitizedName,
+        symbol: ticker.toUpperCase(),
+        pumpfun: `https://pump.fun/${mintKeypair.publicKey.toString()}`,
+        solscan: `https://solscan.io/token/${mintKeypair.publicKey.toString()}?cluster=devnet`,
+        staking: `https://earn.supply/stake/${mintKeypair.publicKey.toString()}`,
+        agentWallet,
+        tokenomics,
+        feeSplit: {
+          agent: `${preset.agentCut}%`,
+          earn: `${preset.earnCut}%`,
+          stakers: `${preset.stakingCut}%`,
+        },
+        txSignature: 'mock_' + requestId,
+        network: 'devnet',
+        mock: true,
+        note: 'Devnet mock - Pump.fun only exists on mainnet. Token registered but not created on-chain.',
+      });
+    }
+    
+    // ========== MAINNET REAL LAUNCH ==========
     
     // Handle image: URL or base64
     let uri = image;
