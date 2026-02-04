@@ -821,15 +821,54 @@ app.get('/earnings/:wallet', async (req, res) => {
   });
 });
 
-// Get all tokens (for dashboard)
+// Get all tokens (for dashboard) with pagination and filtering
 app.get('/tokens', (req, res) => {
-  const tokens = Array.from(tokenRegistry.values())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  let tokens = Array.from(tokenRegistry.values());
+  
+  // Filter by tokenomics
+  const tokenomicsFilter = req.query.tokenomics as string;
+  if (tokenomicsFilter && TOKENOMICS_PRESETS[tokenomicsFilter]) {
+    tokens = tokens.filter(t => t.tokenomics === tokenomicsFilter);
+  }
+  
+  // Filter by agent wallet
+  const agentFilter = req.query.agent as string;
+  if (agentFilter) {
+    tokens = tokens.filter(t => t.agentWallet === agentFilter);
+  }
+  
+  // Search by name or symbol
+  const search = (req.query.search as string || '').toLowerCase();
+  if (search) {
+    tokens = tokens.filter(t => 
+      t.name.toLowerCase().includes(search) || 
+      t.symbol.toLowerCase().includes(search)
+    );
+  }
+  
+  // Sort (default: newest first)
+  const sortBy = req.query.sort as string;
+  if (sortBy === 'oldest') {
+    tokens.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  } else {
+    tokens.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  // Pagination
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
+  const offset = (page - 1) * limit;
+  const totalCount = tokens.length;
+  const paginatedTokens = tokens.slice(offset, offset + limit);
   
   res.json({
     success: true,
-    count: tokens.length,
-    tokens: tokens.map(t => ({
+    count: paginatedTokens.length,
+    total: totalCount,
+    page,
+    limit,
+    pages: Math.ceil(totalCount / limit),
+    tokens: paginatedTokens.map(t => ({
       mint: t.mint,
       name: t.name,
       symbol: t.symbol,
@@ -1061,12 +1100,18 @@ app.get('/admin/distributions', (req, res) => {
 // System status (for monitoring)
 app.get('/admin/status', async (req, res) => {
   try {
-    // Check wallet balance
-    const balance = await connection.getBalance(earnWallet.publicKey);
-    
-    // Get system metrics
+    // Get system metrics (always available)
     const uptime = process.uptime();
     const memory = process.memoryUsage();
+    
+    // Try to check wallet balance (may fail if RPC is down)
+    let balance: number | null = null;
+    let rpcStatus = 'ok';
+    try {
+      balance = await connection.getBalance(earnWallet.publicKey);
+    } catch {
+      rpcStatus = 'unavailable';
+    }
     
     res.json({
       success: true,
@@ -1080,8 +1125,12 @@ app.get('/admin/status', async (req, res) => {
       },
       wallet: {
         address: earnWallet.publicKey.toString(),
-        balance: `${(balance / 1e9).toFixed(4)} SOL`,
+        balance: balance !== null ? `${(balance / 1e9).toFixed(4)} SOL` : 'unavailable',
         balanceLamports: balance,
+      },
+      rpc: {
+        url: RPC_URL,
+        status: rpcStatus,
       },
       registry: {
         tokens: tokenRegistry.size,
@@ -1096,24 +1145,29 @@ app.get('/admin/status', async (req, res) => {
 
 // Check wallet balance and airdrop status
 app.get('/admin/wallet', async (req, res) => {
+  const isDevnet = RPC_URL.includes('devnet');
+  
+  // Try to get balance (may fail if RPC is down)
+  let balance: number | null = null;
+  let rpcStatus = 'ok';
   try {
-    const balance = await connection.getBalance(earnWallet.publicKey);
-    const isDevnet = RPC_URL.includes('devnet');
-    
-    res.json({
-      success: true,
-      address: earnWallet.publicKey.toString(),
-      balance: `${(balance / 1e9).toFixed(4)} SOL`,
-      balanceLamports: balance,
-      network: isDevnet ? 'devnet' : 'mainnet',
-      canLaunch: balance > 0.01 * 1e9, // Need ~0.01 SOL for launch
-      airdropCommand: isDevnet 
-        ? `solana airdrop 1 ${earnWallet.publicKey.toString()} --url devnet`
-        : null,
-    });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
+    balance = await connection.getBalance(earnWallet.publicKey);
+  } catch {
+    rpcStatus = 'unavailable';
   }
+  
+  res.json({
+    success: true,
+    address: earnWallet.publicKey.toString(),
+    balance: balance !== null ? `${(balance / 1e9).toFixed(4)} SOL` : 'unavailable',
+    balanceLamports: balance,
+    network: isDevnet ? 'devnet' : 'mainnet',
+    rpcStatus,
+    canLaunch: balance !== null ? balance > 0.01 * 1e9 : null, // Need ~0.01 SOL for launch
+    airdropCommand: isDevnet 
+      ? `solana airdrop 1 ${earnWallet.publicKey.toString()} --url devnet`
+      : null,
+  });
 });
 
 // ============ END ADMIN ============

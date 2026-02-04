@@ -212,11 +212,13 @@ async function runTests() {
   });
 
   // Admin wallet
-  await test('GET /admin/wallet returns balance', async () => {
+  await test('GET /admin/wallet returns wallet info', async () => {
     const res = await fetchJson('/admin/wallet');
     assert(res.success === true, 'Expected success true');
     assert(!!res.address, 'Should have address');
-    assert(typeof res.balanceLamports === 'number', 'Should have balance');
+    // Balance may be null if RPC is down
+    assert(res.balanceLamports === null || typeof res.balanceLamports === 'number', 'Balance should be number or null');
+    assert(!!res.network, 'Should have network');
   });
 
   // ============ SUMMARY ============
