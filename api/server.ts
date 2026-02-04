@@ -1015,6 +1015,64 @@ app.get('/admin/distributions', (req, res) => {
   }
 });
 
+// System status (for monitoring)
+app.get('/admin/status', async (req, res) => {
+  try {
+    // Check wallet balance
+    const balance = await connection.getBalance(earnWallet.publicKey);
+    
+    // Get system metrics
+    const uptime = process.uptime();
+    const memory = process.memoryUsage();
+    
+    res.json({
+      success: true,
+      system: {
+        uptime: `${Math.floor(uptime / 60)}m ${Math.floor(uptime % 60)}s`,
+        memory: {
+          heapUsed: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
+          heapTotal: `${Math.round(memory.heapTotal / 1024 / 1024)}MB`,
+        },
+        rateLimitEntries: rateLimitStore.size,
+      },
+      wallet: {
+        address: earnWallet.publicKey.toString(),
+        balance: `${(balance / 1e9).toFixed(4)} SOL`,
+        balanceLamports: balance,
+      },
+      registry: {
+        tokens: tokenRegistry.size,
+      },
+      network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
+      ipfsEnabled: IPFS_ENABLED,
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Check wallet balance and airdrop status
+app.get('/admin/wallet', async (req, res) => {
+  try {
+    const balance = await connection.getBalance(earnWallet.publicKey);
+    const isDevnet = RPC_URL.includes('devnet');
+    
+    res.json({
+      success: true,
+      address: earnWallet.publicKey.toString(),
+      balance: `${(balance / 1e9).toFixed(4)} SOL`,
+      balanceLamports: balance,
+      network: isDevnet ? 'devnet' : 'mainnet',
+      canLaunch: balance > 0.01 * 1e9, // Need ~0.01 SOL for launch
+      airdropCommand: isDevnet 
+        ? `solana airdrop 1 ${earnWallet.publicKey.toString()} --url devnet`
+        : null,
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ============ END ADMIN ============
 
 // 404 handler

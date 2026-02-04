@@ -187,6 +187,23 @@ async function runTests() {
     assert(Array.isArray(res.distributions), 'distributions should be array');
   });
 
+  // Admin status
+  await test('GET /admin/status returns system metrics', async () => {
+    const res = await fetchJson('/admin/status');
+    assert(res.success === true, 'Expected success true');
+    assert(!!res.system, 'Should have system info');
+    assert(!!res.wallet, 'Should have wallet info');
+    assert(typeof res.registry?.tokens === 'number', 'Should have token count');
+  });
+
+  // Admin wallet
+  await test('GET /admin/wallet returns balance', async () => {
+    const res = await fetchJson('/admin/wallet');
+    assert(res.success === true, 'Expected success true');
+    assert(!!res.address, 'Should have address');
+    assert(typeof res.balanceLamports === 'number', 'Should have balance');
+  });
+
   // ============ SUMMARY ============
 
   console.log('\n' + '─'.repeat(50));
