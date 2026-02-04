@@ -919,6 +919,59 @@ app.post('/stake/quote', (req, res) => {
 
 // ============ END STAKING ============
 
+// ============ ADMIN ENDPOINTS ============
+
+// Trigger fee distribution (crank)
+app.post('/admin/distribute', async (req, res) => {
+  // Simple auth check (in production, use proper auth)
+  const authKey = req.headers['x-admin-key'];
+  if (authKey !== process.env.ADMIN_KEY && process.env.ADMIN_KEY) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  
+  console.log('\n🔄 Manual distribution triggered via API');
+  
+  try {
+    // Dynamic import of crank
+    const { runDistributionCrank } = await import('./crank');
+    const result = await runDistributionCrank();
+    
+    res.json({
+      success: result.success,
+      ...result,
+    });
+  } catch (e: any) {
+    console.error('Distribution failed:', e);
+    res.status(500).json({
+      success: false,
+      error: e.message,
+    });
+  }
+});
+
+// Get distribution history
+app.get('/admin/distributions', (req, res) => {
+  const logPath = path.join(DATA_DIR, 'distributions.json');
+  
+  try {
+    if (fs.existsSync(logPath)) {
+      const log = JSON.parse(fs.readFileSync(logPath, 'utf-8'));
+      res.json({ success: true, ...log });
+    } else {
+      res.json({
+        success: true,
+        lastRun: null,
+        totalDistributed: 0,
+        distributions: [],
+      });
+    }
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ============ END ADMIN ============
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
