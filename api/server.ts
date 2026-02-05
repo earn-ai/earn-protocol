@@ -1026,6 +1026,63 @@ app.get('/', (req, res) => {
     }
     .form-submit:hover { background: var(--accent-hover); }
     .form-submit:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+    
+    /* Image Uploader */
+    .image-uploader {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg-primary);
+    }
+    .image-uploader:hover, .image-uploader.dragover {
+      border-color: var(--accent);
+      background: rgba(34, 197, 94, 0.05);
+    }
+    .image-uploader.has-image {
+      padding: 12px;
+      border-style: solid;
+    }
+    .image-uploader-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .image-uploader-text { color: var(--text-secondary); font-size: 0.95rem; }
+    .image-uploader-text span { color: var(--accent); }
+    .image-uploader-hint { color: var(--text-muted); font-size: 0.8rem; margin-top: 8px; }
+    .image-uploader input[type="file"] { display: none; }
+    .image-preview {
+      max-width: 200px;
+      max-height: 200px;
+      border-radius: 12px;
+      object-fit: cover;
+      margin: 0 auto;
+      display: block;
+    }
+    .image-preview-container { position: relative; display: inline-block; }
+    .image-remove {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      background: var(--pink);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .image-url-toggle {
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .image-url-toggle a { color: var(--accent); cursor: pointer; }
+    .image-url-input { margin-top: 12px; display: none; }
+    .image-url-input.show { display: block; }
     .form-result {
       margin-top: 20px;
       padding: 16px;
@@ -1144,8 +1201,18 @@ app.get('/', (req, res) => {
             <input type="text" class="form-input" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform:uppercase;">
           </div>
           <div class="form-group">
-            <label>Image URL</label>
-            <input type="url" class="form-input" id="image" placeholder="https://example.com/logo.png" required>
+            <label>Token Image</label>
+            <div class="image-uploader" id="imageUploader">
+              <div class="image-uploader-icon">🖼️</div>
+              <div class="image-uploader-text">Drag & drop an image or <span>browse</span></div>
+              <div class="image-uploader-hint">PNG, JPG or GIF, max 5MB</div>
+              <input type="file" id="imageFile" accept="image/*">
+            </div>
+            <div class="image-url-toggle">Or <a id="toggleUrlInput">paste an image URL</a></div>
+            <div class="image-url-input" id="imageUrlContainer">
+              <input type="url" class="form-input" id="imageUrl" placeholder="https://example.com/logo.png">
+            </div>
+            <input type="hidden" id="image">
           </div>
           <div class="form-group">
             <label>Description <span>(optional)</span></label>
@@ -1355,6 +1422,87 @@ app.get('/', (req, res) => {
     
     loadStats();
     
+    // Image Uploader
+    const imageUploader = document.getElementById('imageUploader');
+    const imageFile = document.getElementById('imageFile');
+    const imageInput = document.getElementById('image');
+    const imageUrlInput = document.getElementById('imageUrl');
+    const imageUrlContainer = document.getElementById('imageUrlContainer');
+    const toggleUrlInput = document.getElementById('toggleUrlInput');
+    let uploadedImageData = null;
+    
+    imageUploader.addEventListener('click', () => imageFile.click());
+    
+    imageUploader.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      imageUploader.classList.add('dragover');
+    });
+    
+    imageUploader.addEventListener('dragleave', () => {
+      imageUploader.classList.remove('dragover');
+    });
+    
+    imageUploader.addEventListener('drop', (e) => {
+      e.preventDefault();
+      imageUploader.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        handleImageFile(file);
+      }
+    });
+    
+    imageFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handleImageFile(file);
+    });
+    
+    function handleImageFile(file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image must be less than 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        uploadedImageData = e.target.result;
+        imageInput.value = uploadedImageData;
+        showImagePreview(uploadedImageData);
+      };
+      reader.readAsDataURL(file);
+    }
+    
+    function showImagePreview(src) {
+      imageUploader.classList.add('has-image');
+      imageUploader.innerHTML = '<div class="image-preview-container">' +
+        '<img src="' + src + '" class="image-preview">' +
+        '<button type="button" class="image-remove" onclick="removeImage(event)">×</button>' +
+        '</div>';
+    }
+    
+    window.removeImage = function(e) {
+      e.stopPropagation();
+      uploadedImageData = null;
+      imageInput.value = '';
+      imageUploader.classList.remove('has-image');
+      imageUploader.innerHTML = '<div class="image-uploader-icon">🖼️</div>' +
+        '<div class="image-uploader-text">Drag & drop an image or <span>browse</span></div>' +
+        '<div class="image-uploader-hint">PNG, JPG or GIF, max 5MB</div>' +
+        '<input type="file" id="imageFile" accept="image/*">';
+      document.getElementById('imageFile').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleImageFile(file);
+      });
+    };
+    
+    toggleUrlInput.addEventListener('click', () => {
+      imageUrlContainer.classList.toggle('show');
+      toggleUrlInput.textContent = imageUrlContainer.classList.contains('show') ? 'hide URL input' : 'paste an image URL';
+    });
+    
+    imageUrlInput.addEventListener('input', (e) => {
+      imageInput.value = e.target.value;
+    });
+    
     const form = document.getElementById('launchForm');
     const result = document.getElementById('result');
     const resultContent = document.getElementById('resultContent');
@@ -1362,13 +1510,20 @@ app.get('/', (req, res) => {
     
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      const imageValue = document.getElementById('image').value;
+      if (!imageValue) {
+        alert('Please upload an image or enter an image URL');
+        return;
+      }
+      
       submitBtn.disabled = true;
       submitBtn.textContent = 'Launching...';
       
       const data = {
         name: document.getElementById('name').value,
         ticker: document.getElementById('ticker').value.toUpperCase(),
-        image: document.getElementById('image').value,
+        image: imageValue,
         tokenomics: document.getElementById('tokenomics').value,
         description: document.getElementById('description').value || undefined,
       };
