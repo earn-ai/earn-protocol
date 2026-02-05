@@ -342,107 +342,142 @@ function logRequest(req: Request, requestId: string, extra?: object) {
 
 // ============ SKILL.MD ============
 
-const SKILL_MD = `# Earn Protocol
+const SKILL_MD = `# Earn Protocol Skill
 
-Launch a token on Pump.fun. Earn handles everything. You get paid.
+> Tokenomics-as-a-Service for Solana. Launch tokens with built-in fees, staking, and buybacks.
 
-## Quick Start
+## What This Does
+
+Earn Protocol gives your token instant tokenomics:
+- **Fee collection** on trades (creator + stakers + buyback)
+- **Staking rewards** for holders
+- **Automated buybacks** to support price
+- **Creator revenue** without rugging
+
+One API call. No smart contract knowledge needed.
+
+## Base URL
+
+\`\`\`
+https://api.earn.supply
+\`\`\`
+
+## Quick Start: Launch a Token
 
 \`\`\`bash
 curl -X POST https://api.earn.supply/launch \\
   -H "Content-Type: application/json" \\
   -d '{
-    "name": "My Token",
-    "ticker": "MTK",
+    "name": "My Agent Token",
+    "symbol": "AGENT",
+    "description": "Token for my autonomous agent",
     "image": "https://example.com/logo.png",
-    "tokenomics": "degen",
-    "agentWallet": "YOUR_SOLANA_WALLET"
+    "twitter": "https://twitter.com/myagent",
+    "website": "https://myagent.ai",
+    "template": "creator"
   }'
 \`\`\`
 
-## Response
+**Templates:**
+- \`degen\` - 40% creator, 30% earn, 30% stakers (high volume memes)
+- \`creator\` - 50% creator, 25% earn, 25% stakers (content creators)
+- \`community\` - 25% creator, 25% earn, 50% stakers (DAO-style)
 
-\`\`\`json
-{
-  "success": true,
-  "mint": "HYp5GzxZ...",
-  "pumpfun": "https://pump.fun/HYp5GzxZ...",
-  "agentWallet": "YOUR_WALLET",
-  "tokenomics": "degen",
-  "agentCut": "50%",
-  "earnCut": "50%"
-}
+## All Endpoints
+
+### Health Check
+\`\`\`bash
+curl https://api.earn.supply/health
 \`\`\`
 
-## Required Fields
+### Get Token Info
+\`\`\`bash
+curl https://api.earn.supply/token/{mint}
+\`\`\`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| name | string | Token name (2-32 chars) |
-| ticker | string | Symbol (2-10 chars, letters only) |
-| image | string | URL or base64 PNG/JPEG |
-| tokenomics | string | degen, creator, community, or lowfee |
+### Register Existing Token
+\`\`\`bash
+curl -X POST https://api.earn.supply/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"mint": "TokenMint...", "creator": "CreatorWallet...", "template": "creator"}'
+\`\`\`
 
-## Optional Fields
+### Create Staking Pool
+\`\`\`bash
+curl -X POST https://api.earn.supply/pool/create \\
+  -H "Content-Type: application/json" \\
+  -d '{"mint": "TokenMint...", "rewardRate": 100, "lockPeriod": 86400}'
+\`\`\`
 
-| Field | Type | Description |
-|-------|------|-------------|
-| agentWallet | string | Your Solana wallet (defaults to Earn wallet if blank) |
-| description | string | Token description (max 500 chars) |
-| website | string | Project website URL |
-| twitter | string | Twitter/X link |
+### Get Pool Info
+\`\`\`bash
+curl https://api.earn.supply/pool/{mint}
+\`\`\`
 
-## Tokenomics Styles
+### Stake Tokens
+\`\`\`bash
+curl -X POST https://api.earn.supply/stake \\
+  -H "Content-Type: application/json" \\
+  -d '{"pool": "PoolAddress...", "amount": 1000000000, "staker": "StakerWallet..."}'
+\`\`\`
 
-| Style | You | Earn | Stakers | Best For |
-|-------|-----|------|---------|----------|
+### Unstake Tokens
+\`\`\`bash
+curl -X POST https://api.earn.supply/unstake \\
+  -H "Content-Type: application/json" \\
+  -d '{"pool": "PoolAddress...", "staker": "StakerWallet..."}'
+\`\`\`
+
+### Claim Rewards
+\`\`\`bash
+curl -X POST https://api.earn.supply/claim \\
+  -H "Content-Type: application/json" \\
+  -d '{"pool": "PoolAddress...", "staker": "StakerWallet..."}'
+\`\`\`
+
+### Explore Tokens
+\`\`\`bash
+curl "https://api.earn.supply/api/explore?template=creator&sort=newest"
+\`\`\`
+
+### Get Stats
+\`\`\`bash
+curl https://api.earn.supply/api/stats
+\`\`\`
+
+## Fee Templates
+
+| Template | Creator | Earn | Stakers | Best For |
+|----------|---------|------|---------|----------|
 | degen | 40% | 30% | 30% | High volume memes |
 | creator | 50% | 25% | 25% | Content creators |
-| community | 25% | 25% | 50% | DAO-style projects |
-| lowfee | 40% | 30% | 30% | Max trading volume |
-
-**Stakers** = People who stake your token on earn.supply/stake earn a portion of fees!
-
-## Check Your Earnings
-
-\`\`\`bash
-curl https://api.earn.supply/earnings/YOUR_WALLET
-\`\`\`
-
-## Check Token
-
-\`\`\`bash
-curl https://api.earn.supply/token/MINT_ADDRESS
-\`\`\`
-
-## Protocol Stats
-
-\`\`\`bash
-curl https://api.earn.supply/stats
-\`\`\`
-
-## How It Works
-
-1. You POST token details to Earn
-2. Earn creates your token on Pump.fun
-3. Users trade on Pump.fun
-4. Creator fees flow to Earn
-5. Earn distributes your cut to your wallet
+| community | 25% | 25% | 50% | DAO-style, reward holders |
+| low_fee | 20% | 10% | 70% | Maximum holder rewards |
 
 ## Error Codes
 
-| Code | Meaning |
-|------|---------|
-| 400 | Invalid input (check error message) |
-| 429 | Rate limited (wait and retry) |
-| 500 | Server error (retry or contact us) |
+| Code | Description |
+|------|-------------|
+| 400 | Bad request - Invalid or missing parameters |
+| 404 | Not found - Token not registered |
+| 429 | Rate limited - Max 10 requests per minute |
+| 500 | Server error - Try again later |
 
 ## Links
 
-- API: https://api.earn.supply
-- Dashboard: https://earn.supply
-- GitHub: https://github.com/earn-ai/earn-protocol
-- Earn Wallet: EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ
+- **API:** https://api.earn.supply
+- **Frontend:** https://earn.supply
+- **Docs:** https://earn.supply/docs
+- **GitHub:** https://github.com/earn-ai/earn-protocol
+- **Earn Wallet:** EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ
+
+## Network
+
+Currently on **Solana Devnet**. Mainnet coming soon.
+
+---
+
+Built by Earn for the Colosseum Agent Hackathon 🚀
 `;
 
 // ============ APP ============
