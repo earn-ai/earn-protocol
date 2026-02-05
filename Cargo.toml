@@ -6,6 +6,9 @@ resolver = "2"
 
 [workspace.dependencies]
 blake3 = "=1.5.0"
+constant_time_eq = "=0.3.0"
+wit-bindgen = "=0.36.0"
+wasi = "=0.11.0+wasi-snapshot-preview1"
 
 [profile.release]
 overflow-checks = true

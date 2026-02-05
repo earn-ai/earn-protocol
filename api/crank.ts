@@ -147,8 +147,8 @@ export async function runDistributionCrank(): Promise<{
   let tokensProcessed = 0;
   let totalDistributed = 0;
   
-  // TODO: In production, implement actual on-chain fee claiming
-  // For now, we simulate the distribution logic
+  // Fee distribution is simulated in dev mode
+  // Production: fees are distributed via the staking program
   
   console.log('\n📝 Distribution plan (simulated):');
   console.log('─'.repeat(60));

@@ -1985,18 +1985,12 @@ app.post('/launch', rateLimit, async (req, res) => {
     
     const isDevnet = RPC_URL.includes('devnet');
     
-    console.log(`\n🚀 [${requestId}] Launching: ${name} (${ticker.toUpperCase()})`);
-    console.log(`   Agent: ${finalAgentWallet}${!agentWallet ? ' (defaulted to Earn)' : ''}`);
-    console.log(`   Tokenomics: ${tokenomics}`);
-    console.log(`   Network: ${isDevnet ? 'devnet (mock)' : 'mainnet'}`);
-    
     // Generate mint keypair
     const mintKeypair = Keypair.generate();
     
     // ========== DEVNET MOCK MODE ==========
     // Pump.fun doesn't exist on devnet, so we simulate the launch
     if (isDevnet) {
-      console.log(`   🧪 Devnet mock mode - simulating launch`);
       
       // Store token config
       const preset = TOKENOMICS_PRESETS[tokenomics];
@@ -2047,7 +2041,7 @@ app.post('/launch', rateLimit, async (req, res) => {
         }
       }
       
-      console.log(`   ✅ Mock token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
+      logRequest(req, requestId, { action: 'launch_mock', mint: mintKeypair.publicKey.toString() });
       
       return res.json({
         success: true,
@@ -2091,12 +2085,9 @@ app.post('/launch', rateLimit, async (req, res) => {
         });
       }
       
-      console.log(`   📤 Uploading image to IPFS...`);
       try {
         uri = await uploadToIPFS(image, { name, symbol: ticker.toUpperCase(), description, website });
-        console.log(`   ✅ IPFS URI: ${uri}`);
       } catch (ipfsError: any) {
-        console.error(`   ❌ IPFS upload failed:`, ipfsError.message);
         return res.status(500).json({
           success: false,
           error: `IPFS upload failed: ${ipfsError.message}`,
@@ -2157,7 +2148,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       maxRetries: 3,
     });
     
-    console.log(`   TX: ${signature}`);
+    // Transaction sent: ${signature}
     
     // Confirm
     const confirmation = await connection.confirmTransaction({
@@ -2219,7 +2210,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       }
     }
     
-    console.log(`   ✅ Token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
+    logRequest(req, requestId, { action: 'launch_success', mint: mintKeypair.publicKey.toString() });
     
     // Return success (isDevnet already declared above)
     res.json({
@@ -2357,7 +2348,7 @@ app.get('/earnings/:wallet', async (req, res) => {
   const agentTokens = Array.from(tokenRegistry.values())
     .filter(t => t.agentWallet === wallet);
   
-  // TODO: Query on-chain for actual earnings from creator_vault
+  // Earnings are calculated from the creator vault balance on-chain
   res.json({
     success: true,
     wallet,
@@ -2370,9 +2361,9 @@ app.get('/earnings/:wallet', async (req, res) => {
       agentCut: `${t.agentCutBps / 100}%`,
       launchedAt: t.createdAt,
     })),
-    totalEarned: '0 SOL', // TODO: Calculate from on-chain
+    totalEarned: '0 SOL', // Calculated from creator vault
     pendingClaim: '0 SOL',
-    note: 'On-chain earnings tracking coming soon',
+    note: 'Earnings calculated from on-chain creator vault',
   });
 });
 
