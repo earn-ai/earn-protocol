@@ -18,10 +18,16 @@ import { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeB
 // PumpSdk loaded dynamically only on mainnet (has native deps that fail on serverless)
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { StakingClient, getStakingPoolPDA, getStakeAccountPDA, STAKING_PROGRAM_ID } from './staking-client';
+import * as supabase from './supabase';
+import * as birdeye from './birdeye';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+
+// Feature flags
+const USE_SUPABASE = supabase.isSupabaseConfigured();
+const USE_BIRDEYE = birdeye.isBirdeyeConfigured();
 
 // ============ CONFIG ============
 
@@ -860,6 +866,31 @@ app.post('/launch', rateLimit, async (req, res) => {
       tokenRegistry.set(mintKeypair.publicKey.toString(), config);
       saveTokens(tokenRegistry);
       
+      // Also save to Supabase if configured
+      if (USE_SUPABASE) {
+        try {
+          await supabase.insertToken({
+            mint: config.mint,
+            name: config.name,
+            symbol: config.symbol,
+            uri: config.uri,
+            agent_wallet: config.agentWallet,
+            tokenomics: config.tokenomics,
+            agent_cut_bps: config.agentCutBps,
+            earn_cut_bps: config.earnCutBps,
+            staking_cut_bps: config.stakingCutBps,
+            created_at: config.createdAt,
+            tx_signature: config.txSignature,
+            description: config.description,
+            website: config.website,
+            twitter: config.twitter,
+            launch_number: config.launchNumber,
+          });
+        } catch (dbError: any) {
+          console.error('Failed to save to Supabase:', dbError.message);
+        }
+      }
+      
       console.log(`   ✅ Mock token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
       
       return res.json({
@@ -1006,6 +1037,31 @@ app.post('/launch', rateLimit, async (req, res) => {
     
     tokenRegistry.set(mintKeypair.publicKey.toString(), config);
     saveTokens(tokenRegistry); // Persist to file
+    
+    // Also save to Supabase if configured
+    if (USE_SUPABASE) {
+      try {
+        await supabase.insertToken({
+          mint: config.mint,
+          name: config.name,
+          symbol: config.symbol,
+          uri: config.uri,
+          agent_wallet: config.agentWallet,
+          tokenomics: config.tokenomics,
+          agent_cut_bps: config.agentCutBps,
+          earn_cut_bps: config.earnCutBps,
+          staking_cut_bps: config.stakingCutBps,
+          created_at: config.createdAt,
+          tx_signature: config.txSignature,
+          description: config.description,
+          website: config.website,
+          twitter: config.twitter,
+          launch_number: config.launchNumber,
+        });
+      } catch (dbError: any) {
+        console.error('Failed to save to Supabase:', dbError.message);
+      }
+    }
     
     console.log(`   ✅ Token #${config.launchNumber}: ${mintKeypair.publicKey.toString()}`);
     
@@ -1184,6 +1240,92 @@ app.get('/tokenomics', (req, res) => {
     })),
     note: 'Staking cut goes to token holders who stake on earn.supply/stake',
   });
+});
+
+// ============ EXPLORE ENDPOINT (with prices) ============
+
+app.get('/explore', async (req, res) => {
+  try {
+    const {
+      page = '1',
+      limit = '20',
+      tokenomics,
+      search,
+      sort = 'newest',
+      includePrice = 'true',
+    } = req.query;
+    
+    const pageNum = parseInt(page as string);
+    const limitNum = Math.min(parseInt(limit as string), 100);
+    
+    let tokens: any[];
+    let total: number;
+    
+    // Use Supabase if configured, otherwise fallback to in-memory
+    if (USE_SUPABASE) {
+      const result = await supabase.getAllTokens({
+        page: pageNum,
+        limit: limitNum,
+        tokenomics: tokenomics as string,
+        search: search as string,
+        sort: sort as 'newest' | 'oldest',
+      });
+      tokens = result.tokens;
+      total = result.total;
+    } else {
+      // Fallback to in-memory
+      let allTokens = Array.from(tokenRegistry.values());
+      
+      if (tokenomics) {
+        allTokens = allTokens.filter(t => t.tokenomics === tokenomics);
+      }
+      if (search) {
+        const s = (search as string).toLowerCase();
+        allTokens = allTokens.filter(t => 
+          t.name.toLowerCase().includes(s) || t.symbol.toLowerCase().includes(s)
+        );
+      }
+      
+      allTokens.sort((a, b) => sort === 'oldest' 
+        ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      
+      total = allTokens.length;
+      tokens = allTokens.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+    }
+    
+    // Enrich with prices if requested
+    if (includePrice === 'true' && tokens.length > 0) {
+      const mints = tokens.map(t => t.mint);
+      const prices = await birdeye.getMultipleTokenPrices(mints);
+      
+      tokens = tokens.map(token => ({
+        ...token,
+        price: prices.get(token.mint)?.price || null,
+        priceChange24h: prices.get(token.mint)?.priceChange24h || null,
+        volume24h: prices.get(token.mint)?.volume24h || null,
+        marketCap: prices.get(token.mint)?.marketCap || null,
+      }));
+      
+      // Sort by volume if requested
+      if (sort === 'volume') {
+        tokens.sort((a: any, b: any) => (b.volume24h || 0) - (a.volume24h || 0));
+      }
+    }
+    
+    res.json({
+      success: true,
+      tokens,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
+      dataSource: USE_SUPABASE ? 'supabase' : 'memory',
+      pricesEnabled: birdeye.isPriceApiAvailable(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // ============ STAKING ENDPOINTS ============
