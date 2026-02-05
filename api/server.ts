@@ -439,7 +439,17 @@ curl -X POST https://api.earn.supply/launch \\
 - \`creator\` - 50% creator, 25% earn, 25% stakers (content creators)
 - \`community\` - 25% creator, 25% earn, 50% stakers (DAO-style)
 
-## All Endpoints
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "mint": "TokenMintAddress...",
+  "pool": "StakingPoolAddress...",
+  "explorer": "https://solscan.io/token/..."
+}
+\`\`\`
+
+## Endpoints
 
 ### Health Check
 \`\`\`bash
@@ -455,14 +465,22 @@ curl https://api.earn.supply/token/{mint}
 \`\`\`bash
 curl -X POST https://api.earn.supply/register \\
   -H "Content-Type: application/json" \\
-  -d '{"mint": "TokenMint...", "creator": "CreatorWallet...", "template": "creator"}'
+  -d '{
+    "mint": "ExistingTokenMint...",
+    "creator": "CreatorWalletAddress...",
+    "template": "creator"
+  }'
 \`\`\`
 
 ### Create Staking Pool
 \`\`\`bash
 curl -X POST https://api.earn.supply/pool/create \\
   -H "Content-Type: application/json" \\
-  -d '{"mint": "TokenMint...", "rewardRate": 100, "lockPeriod": 86400}'
+  -d '{
+    "mint": "TokenMintAddress...",
+    "rewardRate": 100,
+    "lockPeriod": 86400
+  }'
 \`\`\`
 
 ### Get Pool Info
@@ -474,21 +492,31 @@ curl https://api.earn.supply/pool/{mint}
 \`\`\`bash
 curl -X POST https://api.earn.supply/stake \\
   -H "Content-Type: application/json" \\
-  -d '{"pool": "PoolAddress...", "amount": 1000000000, "staker": "StakerWallet..."}'
+  -d '{
+    "pool": "PoolAddress...",
+    "amount": 1000000000,
+    "staker": "StakerWalletAddress..."
+  }'
 \`\`\`
 
 ### Unstake Tokens
 \`\`\`bash
 curl -X POST https://api.earn.supply/unstake \\
   -H "Content-Type: application/json" \\
-  -d '{"pool": "PoolAddress...", "staker": "StakerWallet..."}'
+  -d '{
+    "pool": "PoolAddress...",
+    "staker": "StakerWalletAddress..."
+  }'
 \`\`\`
 
 ### Claim Rewards
 \`\`\`bash
 curl -X POST https://api.earn.supply/claim \\
   -H "Content-Type: application/json" \\
-  -d '{"pool": "PoolAddress...", "staker": "StakerWallet..."}'
+  -d '{
+    "pool": "PoolAddress...",
+    "staker": "StakerWalletAddress..."
+  }'
 \`\`\`
 
 ### Explore Tokens
@@ -501,7 +529,7 @@ curl "https://api.earn.supply/api/explore?template=creator&sort=newest"
 curl https://api.earn.supply/api/stats
 \`\`\`
 
-## Fee Templates
+## Fee Templates Explained
 
 | Template | Creator | Earn | Stakers | Best For |
 |----------|---------|------|---------|----------|
@@ -519,13 +547,32 @@ curl https://api.earn.supply/api/stats
 | 429 | Rate limited - Max 10 requests per minute |
 | 500 | Server error - Try again later |
 
+## Integration Example
+
+\`\`\`typescript
+// Launch a token for your agent
+const response = await fetch('https://api.earn.supply/launch', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'AgentCoin',
+    symbol: 'AGT', 
+    description: 'Utility token for my agent services',
+    template: 'creator'
+  })
+});
+
+const { mint, pool } = await response.json();
+console.log(\\\`Token launched: \\\${mint}\\\`);
+console.log(\\\`Staking pool: \\\${pool}\\\`);
+\`\`\`
+
 ## Links
 
 - **API:** https://api.earn.supply
 - **Frontend:** https://earn.supply
 - **Docs:** https://earn.supply/docs
 - **GitHub:** https://github.com/earn-ai/earn-protocol
-- **Earn Wallet:** EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ
 
 ## Network
 
@@ -533,19 +580,31 @@ Currently on **Solana Devnet**. Mainnet coming soon.
 
 ## 🔑 For Enhanced Data (Optional)
 
-Price data uses **DexScreener** (free, no key needed).
+Earn uses **DexScreener** for prices (free, no key needed).
 
-For richer metadata, set up **Helius**:
+For richer token metadata, balances, and transaction history, agents can self-provision a **Helius** API key:
+
 \`\`\`bash
-npm install -g helius-cli && helius login
+# Install Helius CLI
+npm install -g helius-cli
+
+# Login with your wallet to get a key
+helius login
+
 # Or get a key at: https://dev.helius.xyz
 \`\`\`
 
-Set \`HELIUS_API_KEY\` to unlock token metadata, balances, and tx history.
+Then set \`HELIUS_API_KEY\` in your environment. This unlocks:
+- Token metadata via DAS (Digital Asset Standard)
+- Wallet balances
+- Transaction history
+- Enhanced RPC
+
+**Note:** Price data always uses DexScreener (free). Helius is optional for metadata.
 
 ---
 
-Built by Earn for the Colosseum Agent Hackathon 🚀
+Built by [@Earn](https://moltbook.com/u/Earn) for the Colosseum Agent Hackathon 🚀
 `;
 
 // ============ APP ============
