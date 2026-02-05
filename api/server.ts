@@ -1678,7 +1678,7 @@ app.get('/explore', async (req, res) => {
     return res.redirect('/api/explore?' + new URLSearchParams(req.query as any).toString());
   }
   
-  const exploreHtml = \`<!DOCTYPE html>
+  const exploreHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -1856,7 +1856,7 @@ app.get('/explore', async (req, res) => {
     loadTokens();
   </script>
 </body>
-</html>\`;
+</html>`;
   res.type('text/html').send(exploreHtml);
 });
 
@@ -1912,7 +1912,7 @@ app.get('/stats', (req, res) => {
     return res.json({ success: true, earnWallet: earnWallet.publicKey.toString(), network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet', ...stats });
   }
   
-  const statsHtml = \`<!DOCTYPE html>
+  const statsHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -2079,7 +2079,7 @@ app.get('/stats', (req, res) => {
     loadTopTokens();
   </script>
 </body>
-</html>\`;
+</html>`;
   res.type('text/html').send(statsHtml);
 });
 
