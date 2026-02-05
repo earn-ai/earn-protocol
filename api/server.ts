@@ -376,12 +376,12 @@ curl -X POST https://api.earn.supply/launch \\
 | ticker | string | Symbol (2-10 chars, letters only) |
 | image | string | URL or base64 PNG/JPEG |
 | tokenomics | string | degen, creator, community, or lowfee |
-| agentWallet | string | Your Solana wallet for earnings |
 
 ## Optional Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
+| agentWallet | string | Your Solana wallet (defaults to Earn wallet if blank) |
 | description | string | Token description (max 500 chars) |
 | website | string | Project website URL |
 | twitter | string | Twitter/X link |
@@ -520,9 +520,160 @@ app.get('/skill.md', (req, res) => {
   res.type('text/markdown').send(SKILL_MD);
 });
 
-// Also serve at root for convenience
+// Interactive landing page
 app.get('/', (req, res) => {
-  res.type('text/markdown').send(SKILL_MD);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Earn Protocol API</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; padding: 2rem; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    h1 span { color: #ef4444; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+    .form-group { margin-bottom: 1.5rem; }
+    label { display: block; margin-bottom: 0.5rem; color: #ccc; font-size: 0.9rem; }
+    input, select { width: 100%; padding: 0.75rem; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #fff; font-size: 1rem; }
+    input:focus, select:focus { outline: none; border-color: #ef4444; }
+    select { cursor: pointer; }
+    .optional { color: #666; font-size: 0.8rem; }
+    button { width: 100%; padding: 1rem; background: #ef4444; color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+    button:hover { background: #dc2626; }
+    button:disabled { background: #666; cursor: not-allowed; }
+    .result { margin-top: 2rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; display: none; }
+    .result.show { display: block; }
+    .result.success { border: 1px solid #22c55e; }
+    .result.error { border: 1px solid #ef4444; }
+    pre { overflow-x: auto; font-size: 0.85rem; }
+    .tokenomics-info { font-size: 0.8rem; color: #888; margin-top: 0.25rem; }
+    .curl-box { margin-top: 2rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; }
+    .curl-box h3 { margin-bottom: 0.5rem; font-size: 0.9rem; color: #888; }
+    .curl-box pre { color: #22c55e; }
+    a { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 <span>Earn</span> Protocol</h1>
+    <p class="subtitle">Launch a token on Pump.fun. Earn handles everything. You get paid.</p>
+    
+    <form id="launchForm">
+      <div class="form-group">
+        <label>Token Name *</label>
+        <input type="text" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
+      </div>
+      
+      <div class="form-group">
+        <label>Ticker *</label>
+        <input type="text" id="ticker" placeholder="MAT" required pattern="[A-Za-z]{2,10}">
+      </div>
+      
+      <div class="form-group">
+        <label>Image URL *</label>
+        <input type="url" id="image" placeholder="https://example.com/logo.png" required>
+      </div>
+      
+      <div class="form-group">
+        <label>Tokenomics *</label>
+        <select id="tokenomics" required>
+          <option value="degen">🎰 Degen - You 40% | Earn 30% | Stakers 30%</option>
+          <option value="creator">🎨 Creator - You 50% | Earn 25% | Stakers 25%</option>
+          <option value="community">🏛️ Community - You 25% | Earn 25% | Stakers 50%</option>
+        </select>
+        <div class="tokenomics-info">Choose how trading fees are split</div>
+      </div>
+      
+      <div class="form-group">
+        <label>Your Wallet <span class="optional">(optional - defaults to Earn wallet)</span></label>
+        <input type="text" id="agentWallet" placeholder="Your Solana wallet address">
+      </div>
+      
+      <button type="submit" id="submitBtn">🚀 Launch Token</button>
+    </form>
+    
+    <div id="result" class="result">
+      <pre id="resultContent"></pre>
+    </div>
+    
+    <div class="curl-box">
+      <h3>📋 Or use cURL:</h3>
+      <pre id="curlCommand">curl -X POST https://api.earn.supply/launch \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"...","ticker":"...","image":"...","tokenomics":"degen"}'</pre>
+    </div>
+    
+    <p style="margin-top: 2rem; color: #666; font-size: 0.85rem;">
+      <a href="/skill.md">View full API docs</a> | 
+      <a href="/stats">Stats</a> | 
+      <a href="https://earn.supply">Dashboard</a>
+    </p>
+  </div>
+  
+  <script>
+    const form = document.getElementById('launchForm');
+    const result = document.getElementById('result');
+    const resultContent = document.getElementById('resultContent');
+    const submitBtn = document.getElementById('submitBtn');
+    const curlCmd = document.getElementById('curlCommand');
+    
+    // Update curl command as user types
+    function updateCurl() {
+      const data = {
+        name: document.getElementById('name').value || '...',
+        ticker: document.getElementById('ticker').value || '...',
+        image: document.getElementById('image').value || '...',
+        tokenomics: document.getElementById('tokenomics').value
+      };
+      const wallet = document.getElementById('agentWallet').value;
+      if (wallet) data.agentWallet = wallet;
+      
+      curlCmd.textContent = \`curl -X POST https://api.earn.supply/launch \\\\
+  -H "Content-Type: application/json" \\\\
+  -d '\${JSON.stringify(data)}'\`;
+    }
+    
+    document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', updateCurl));
+    
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Launching...';
+      
+      const data = {
+        name: document.getElementById('name').value,
+        ticker: document.getElementById('ticker').value,
+        image: document.getElementById('image').value,
+        tokenomics: document.getElementById('tokenomics').value
+      };
+      const wallet = document.getElementById('agentWallet').value;
+      if (wallet) data.agentWallet = wallet;
+      
+      try {
+        const res = await fetch('/launch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const json = await res.json();
+        
+        result.className = 'result show ' + (json.success ? 'success' : 'error');
+        resultContent.textContent = JSON.stringify(json, null, 2);
+      } catch (err) {
+        result.className = 'result show error';
+        resultContent.textContent = 'Error: ' + err.message;
+      }
+      
+      submitBtn.disabled = false;
+      submitBtn.textContent = '🚀 Launch Token';
+    });
+  </script>
+</body>
+</html>`;
+  res.type('text/html').send(html);
 });
 
 // Global stats
@@ -547,15 +698,19 @@ app.post('/launch', rateLimit, async (req, res) => {
     
     // ========== VALIDATION ==========
     
-    // Required fields
-    if (!name || !ticker || !image || !tokenomics || !agentWallet) {
+    // Required fields (agentWallet defaults to Earn wallet if not provided)
+    if (!name || !ticker || !image || !tokenomics) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields',
-        required: ['name', 'ticker', 'image', 'tokenomics', 'agentWallet'],
+        required: ['name', 'ticker', 'image', 'tokenomics'],
+        optional: ['agentWallet (defaults to Earn wallet)'],
         requestId,
       });
     }
+    
+    // Default to Earn wallet if no agent wallet provided
+    const finalAgentWallet = agentWallet || earnWallet.publicKey.toString();
     
     // Name validation and sanitization
     const sanitizedName = sanitizeString(name);
@@ -605,7 +760,7 @@ app.post('/launch', rateLimit, async (req, res) => {
     // Wallet validation
     let agentPubkey: PublicKey;
     try {
-      agentPubkey = new PublicKey(agentWallet);
+      agentPubkey = new PublicKey(finalAgentWallet);
     } catch {
       return res.status(400).json({
         success: false,
@@ -644,7 +799,7 @@ app.post('/launch', rateLimit, async (req, res) => {
     const isDevnet = RPC_URL.includes('devnet');
     
     console.log(`\n🚀 [${requestId}] Launching: ${name} (${ticker.toUpperCase()})`);
-    console.log(`   Agent: ${agentWallet}`);
+    console.log(`   Agent: ${finalAgentWallet}${!agentWallet ? ' (defaulted to Earn)' : ''}`);
     console.log(`   Tokenomics: ${tokenomics}`);
     console.log(`   Network: ${isDevnet ? 'devnet (mock)' : 'mainnet'}`);
     
@@ -664,7 +819,7 @@ app.post('/launch', rateLimit, async (req, res) => {
         name: sanitizedName,
         symbol: ticker.toUpperCase(),
         uri: image, // Use original image URL for mock
-        agentWallet,
+        agentWallet: finalAgentWallet,
         tokenomics,
         agentCutBps: preset.agentCut * 100,
         earnCutBps: preset.earnCut * 100,
@@ -692,7 +847,7 @@ app.post('/launch', rateLimit, async (req, res) => {
         pumpfun: `https://pump.fun/${mintKeypair.publicKey.toString()}`,
         solscan: `https://solscan.io/token/${mintKeypair.publicKey.toString()}?cluster=devnet`,
         staking: `https://earn.supply/stake/${mintKeypair.publicKey.toString()}`,
-        agentWallet,
+        agentWallet: finalAgentWallet,
         tokenomics,
         feeSplit: {
           agent: `${preset.agentCut}%`,
@@ -811,7 +966,7 @@ app.post('/launch', rateLimit, async (req, res) => {
       name: sanitizedName,
       symbol: ticker.toUpperCase(),
       uri,
-      agentWallet,
+      agentWallet: finalAgentWallet,
       tokenomics,
       agentCutBps: preset.agentCut * 100,
       earnCutBps: preset.earnCut * 100,
@@ -842,7 +997,7 @@ app.post('/launch', rateLimit, async (req, res) => {
         ? `https://solscan.io/token/${mintKeypair.publicKey.toString()}?cluster=devnet`
         : `https://solscan.io/token/${mintKeypair.publicKey.toString()}`,
       staking: `https://earn.supply/stake/${mintKeypair.publicKey.toString()}`,
-      agentWallet,
+      agentWallet: finalAgentWallet,
       tokenomics,
       feeSplit: {
         agent: `${preset.agentCut}%`,
