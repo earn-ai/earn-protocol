@@ -1006,7 +1006,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <header class="header">
-    <div class="logo">🚀 <span>Earn</span></div>
+    <a href="/" class="logo"><img src="/logo.jpg" alt="Earn" style="width:32px;height:32px;border-radius:6px;"><span>Earn</span></a>
     <nav class="nav">
       <a href="/">Launch</a>
       <a href="/explore">Explore</a>
@@ -1621,7 +1621,7 @@ app.get('/explore', async (req, res) => {
 <body>
   <header class="header">
     <div class="container header-inner">
-      <a href="/" class="logo">🚀 <span>Earn</span></a>
+      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn" style="width:32px;height:32px;border-radius:6px;"><span>Earn</span></a>
       <nav class="nav">
         <a href="/">Launch</a>
         <a href="/explore" style="color:var(--text)">Explore</a>
@@ -1849,7 +1849,7 @@ app.get('/stats', (req, res) => {
 <body>
   <header class="header">
     <div class="container header-inner">
-      <a href="/" class="logo">🚀 <span>Earn</span></a>
+      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn" style="width:32px;height:32px;border-radius:6px;"><span>Earn</span></a>
       <nav class="nav">
         <a href="/">Launch</a>
         <a href="/explore">Explore</a>
