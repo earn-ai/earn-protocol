@@ -926,14 +926,35 @@ app.get('/', (req, res) => {
     /* Templates */
     .templates { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
     .template-card {
-      background: var(--bg-card);
+      background: linear-gradient(145deg, var(--bg-card), #0a0a0a);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 24px;
       transition: all 0.3s;
       cursor: pointer;
+      position: relative;
     }
-    .template-card:hover { border-color: var(--accent); }
+    .template-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      padding: 1px;
+      background: linear-gradient(145deg, transparent, transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      transition: all 0.3s;
+    }
+    .template-card:hover { 
+      border-color: var(--accent); 
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px -12px rgba(34, 197, 94, 0.25);
+    }
+    .template-card:hover::before {
+      background: linear-gradient(145deg, var(--accent), transparent);
+    }
     .template-card h3 { font-size: 1.25rem; margin-bottom: 8px; }
     .template-card .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
     .template-card .fee { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: 16px; }
@@ -1016,29 +1037,38 @@ app.get('/', (req, res) => {
     .form-result.error { background: rgba(244, 63, 94, 0.1); border: 1px solid var(--pink); }
     .form-result pre { font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; }
     
-    /* Agent Discovery Banner */
-    .agent-banner {
-      background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(59, 130, 246, 0.1));
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
+    /* Agent Discovery - Subtle footer style */
+    .agent-section {
+      border-top: 1px solid var(--border);
+      padding: 32px 0;
       text-align: center;
-      margin-top: 40px;
+      background: var(--bg-secondary);
     }
-    .agent-banner h3 { font-size: 1.25rem; margin-bottom: 12px; }
-    .agent-banner p { color: var(--text-secondary); margin-bottom: 20px; }
-    .agent-links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .agent-section p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
+    .agent-section p span { color: var(--accent); }
+    .agent-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
     .agent-link {
-      padding: 10px 16px;
+      padding: 8px 14px;
       background: var(--bg-primary);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 0.9rem;
-      color: var(--text-secondary);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: monospace;
       transition: all 0.2s;
     }
     .agent-link:hover { border-color: var(--accent); color: var(--accent); }
-    .agent-link code { color: var(--accent); }
+    
+    /* Stats Bar */
+    .stats-bar {
+      padding: 24px 0;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-grid { display: flex; justify-content: center; gap: 48px; flex-wrap: wrap; }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
+    .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
     
     /* Footer */
     .footer {
@@ -1087,6 +1117,17 @@ app.get('/', (req, res) => {
     </div>
   </header>
 
+  <!-- Stats Bar -->
+  <section class="stats-bar" id="statsBar">
+    <div class="container">
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-item"><div class="stat-value" id="statTokens">-</div><div class="stat-label">Tokens</div></div>
+        <div class="stat-item"><div class="stat-value" id="statVolume">-</div><div class="stat-label">24h Volume</div></div>
+        <div class="stat-item"><div class="stat-value" id="statFees">-</div><div class="stat-label">Fees Distributed</div></div>
+      </div>
+    </div>
+  </section>
+
   <!-- Launch Form -->
   <section id="launch" class="section launch-section">
     <div class="container">
@@ -1131,18 +1172,7 @@ app.get('/', (req, res) => {
           <pre id="resultContent"></pre>
         </div>
         
-        <!-- Agent Discovery -->
-        <div class="agent-banner">
-          <h3>🤖 Building an AI Agent?</h3>
-          <p>Integrate Earn Protocol into your agent with these resources:</p>
-          <div class="agent-links">
-            <a href="/.well-known/ai-plugin.json" class="agent-link"><code>ai-plugin.json</code></a>
-            <a href="/openapi.json" class="agent-link"><code>openapi.json</code></a>
-            <a href="/llm.txt" class="agent-link"><code>llm.txt</code></a>
-            <a href="/docs" class="agent-link">API Docs</a>
-          </div>
-        </div>
-      </div>
+              </div>
     </div>
   </section>
 
@@ -1277,12 +1307,20 @@ app.get('/', (req, res) => {
   </section>
 
 
+  <!-- Agent Discovery -->
+  <section class="agent-section">
+    <div class="container">
+      <p>🤖 <span>AI Agents</span>: Integrate via <a href="/openapi.json">openapi.json</a> • <a href="/llm.txt">llm.txt</a> • <a href="/.well-known/ai-plugin.json">ai-plugin.json</a></p>
+    </div>
+  </section>
+
   <!-- Footer -->
   <footer class="footer">
     <div class="container">
       <div class="footer-links">
-        <a href="/docs">API Documentation</a>
-        <a href="/explore">Explore Tokens</a>
+        <a href="/docs">API Docs</a>
+        <a href="/explore">Explore</a>
+        <a href="/stats">Stats</a>
         <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
         <a href="https://earn.supply" target="_blank">Dashboard</a>
       </div>
@@ -1291,6 +1329,34 @@ app.get('/', (req, res) => {
   </footer>
 
   <script>
+    // Load stats
+    async function loadStats() {
+      try {
+        const res = await fetch('/stats');
+        const data = await res.json();
+        const statsBar = document.getElementById('statsBar');
+        
+        if (data.success && (data.totalLaunches > 0 || data.totalVolume24h > 0)) {
+          document.getElementById('statTokens').textContent = data.totalLaunches || 0;
+          document.getElementById('statVolume').textContent = data.totalVolume24h ? '$' + formatNum(data.totalVolume24h) : '$0';
+          document.getElementById('statFees').textContent = data.totalFees ? '$' + formatNum(data.totalFees) : '$0';
+          statsBar.style.display = 'block';
+        } else {
+          statsBar.style.display = 'none';
+        }
+      } catch (e) {
+        document.getElementById('statsBar').style.display = 'none';
+      }
+    }
+    
+    function formatNum(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+      return n.toFixed(0);
+    }
+    
+    loadStats();
+    
     const form = document.getElementById('launchForm');
     const result = document.getElementById('result');
     const resultContent = document.getElementById('resultContent');
@@ -1604,8 +1670,435 @@ app.get('/docs', (req, res) => {
   res.type('text/html').send(docsHtml);
 });
 
-// Global stats
+// Explore Page
+app.get('/explore', async (req, res) => {
+  // Check if requesting JSON (API) or HTML (page)
+  if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+    // Forward to API handler - will be handled by the explore API below
+    return res.redirect('/api/explore?' + new URLSearchParams(req.query as any).toString());
+  }
+  
+  const exploreHtml = \`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explore Tokens - Earn Protocol</title>
+  <link rel="icon" href="/logo.jpg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --bg-card: #111; --border: #1f1f1f; --border-hover: #2a2a2a;
+      --text: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
+      --accent: #22c55e; --pink: #f43f5e; --blue: #3b82f6; --gold: #eab308;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    
+    .header { padding: 16px 0; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; }
+    .logo span { color: var(--accent); }
+    .nav { display: flex; gap: 24px; align-items: center; }
+    .nav a { color: var(--text-secondary); font-weight: 500; }
+    .nav a:hover { color: var(--text); }
+    .btn { padding: 10px 20px; background: var(--accent); color: #000; border-radius: 8px; font-weight: 600; }
+    
+    .page-header { padding: 48px 0 32px; }
+    .page-header h1 { font-size: 2rem; margin-bottom: 8px; }
+    .page-header p { color: var(--text-secondary); }
+    
+    .filters { display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap; align-items: center; }
+    .filter-btn { padding: 8px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary); cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+    .filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: rgba(34, 197, 94, 0.1); }
+    select { padding: 8px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 0.9rem; cursor: pointer; }
+    
+    .token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .token-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; transition: all 0.2s; }
+    .token-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+    .token-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .token-icon { width: 48px; height: 48px; border-radius: 10px; background: var(--bg); object-fit: cover; }
+    .token-name { font-weight: 600; font-size: 1.1rem; }
+    .token-symbol { color: var(--text-muted); font-size: 0.9rem; }
+    .token-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; margin-left: 8px; }
+    .token-badge.degen { background: rgba(244,63,94,0.2); color: #f87171; }
+    .token-badge.creator { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .token-badge.community { background: rgba(59,130,246,0.2); color: #60a5fa; }
+    .token-badge.lowfee { background: rgba(234,179,8,0.2); color: #facc15; }
+    .token-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .token-stat { }
+    .token-stat-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 2px; }
+    .token-stat-value { font-weight: 600; font-size: 0.95rem; }
+    .token-stat-value.positive { color: var(--accent); }
+    .token-stat-value.negative { color: var(--pink); }
+    .token-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .token-actions a { flex: 1; text-align: center; padding: 8px; background: var(--bg); border-radius: 8px; font-size: 0.85rem; color: var(--text-secondary); transition: all 0.2s; }
+    .token-actions a:hover { color: var(--accent); }
+    
+    .loading { text-align: center; padding: 60px; color: var(--text-muted); }
+    .empty { text-align: center; padding: 60px; color: var(--text-muted); }
+    .footer { padding: 48px 0; border-top: 1px solid var(--border); text-align: center; margin-top: 60px; }
+    .footer a { color: var(--text-muted); margin: 0 16px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn"><span>Earn</span>Protocol</a>
+      <nav class="nav">
+        <a href="/">Launch</a>
+        <a href="/explore" style="color:var(--text)">Explore</a>
+        <a href="/stats">Stats</a>
+        <a href="/docs">API</a>
+      </nav>
+    </div>
+  </header>
+  
+  <main class="container">
+    <div class="page-header">
+      <h1>Explore Tokens</h1>
+      <p>Discover Earn-powered tokens and start earning rewards</p>
+    </div>
+    
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="degen">🎰 Degen</button>
+      <button class="filter-btn" data-filter="creator">🎨 Creator</button>
+      <button class="filter-btn" data-filter="community">🏛️ Community</button>
+      <button class="filter-btn" data-filter="lowfee">💰 Low Fee</button>
+      <select id="sortBy" style="margin-left:auto;">
+        <option value="newest">Newest</option>
+        <option value="volume">Volume</option>
+        <option value="oldest">Oldest</option>
+      </select>
+    </div>
+    
+    <div id="tokenGrid" class="token-grid">
+      <div class="loading">Loading tokens...</div>
+    </div>
+  </main>
+  
+  <footer class="footer">
+    <a href="/">Home</a>
+    <a href="/docs">API</a>
+    <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
+  </footer>
+  
+  <script>
+    let currentFilter = 'all';
+    let currentSort = 'newest';
+    
+    async function loadTokens() {
+      const grid = document.getElementById('tokenGrid');
+      grid.innerHTML = '<div class="loading">Loading tokens...</div>';
+      
+      try {
+        let url = '/api/explore?includePrice=true&limit=50';
+        if (currentFilter !== 'all') url += '&tokenomics=' + currentFilter;
+        if (currentSort) url += '&sort=' + currentSort;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (!data.tokens?.length) {
+          grid.innerHTML = '<div class="empty">No tokens found. Be the first to launch!</div>';
+          return;
+        }
+        
+        grid.innerHTML = data.tokens.map(t => \\\`
+          <div class="token-card">
+            <div class="token-header">
+              <img src="\\\${t.uri || t.image || '/logo.jpg'}" class="token-icon" onerror="this.src='/logo.jpg'">
+              <div>
+                <div class="token-name">\\\${t.name} <span class="token-badge \\\${t.tokenomics}">\\\${t.tokenomics}</span></div>
+                <div class="token-symbol">\\\${t.symbol}</div>
+              </div>
+            </div>
+            <div class="token-stats">
+              <div class="token-stat">
+                <div class="token-stat-label">Price</div>
+                <div class="token-stat-value">\\\${t.price ? '$' + t.price.toFixed(6) : '-'}</div>
+              </div>
+              <div class="token-stat">
+                <div class="token-stat-label">24h Change</div>
+                <div class="token-stat-value \\\${(t.priceChange24h || 0) >= 0 ? 'positive' : 'negative'}">\\\${t.priceChange24h ? (t.priceChange24h >= 0 ? '+' : '') + t.priceChange24h.toFixed(1) + '%' : '-'}</div>
+              </div>
+              <div class="token-stat">
+                <div class="token-stat-label">24h Volume</div>
+                <div class="token-stat-value">\\\${t.volume24h ? '$' + formatNum(t.volume24h) : '-'}</div>
+              </div>
+              <div class="token-stat">
+                <div class="token-stat-label">Creator Cut</div>
+                <div class="token-stat-value">\\\${(t.agent_cut_bps/100).toFixed(0)}%</div>
+              </div>
+            </div>
+            <div class="token-actions">
+              <a href="https://pump.fun/\\\${t.mint}" target="_blank">Trade ↗</a>
+              <a href="https://solscan.io/token/\\\${t.mint}" target="_blank">Solscan ↗</a>
+            </div>
+          </div>
+        \\\`).join('');
+      } catch (e) {
+        grid.innerHTML = '<div class="empty">Failed to load tokens</div>';
+      }
+    }
+    
+    function formatNum(n) {
+      if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+      return n.toFixed(0);
+    }
+    
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        loadTokens();
+      });
+    });
+    
+    document.getElementById('sortBy').addEventListener('change', (e) => {
+      currentSort = e.target.value;
+      loadTokens();
+    });
+    
+    loadTokens();
+  </script>
+</body>
+</html>\`;
+  res.type('text/html').send(exploreHtml);
+});
+
+// Explore API endpoint
+app.get('/api/explore', async (req, res) => {
+  try {
+    const { page = '1', limit = '20', tokenomics, search, sort = 'newest', includePrice = 'true' } = req.query;
+    const pageNum = parseInt(page as string);
+    const limitNum = Math.min(parseInt(limit as string), 100);
+    
+    let tokens: any[];
+    let total: number;
+    
+    if (USE_SUPABASE) {
+      const result = await supabase.getAllTokens({ page: pageNum, limit: limitNum, tokenomics: tokenomics as string, search: search as string, sort: sort as 'newest' | 'oldest' });
+      tokens = result.tokens;
+      total = result.total;
+    } else {
+      let allTokens = Array.from(tokenRegistry.values());
+      if (tokenomics) allTokens = allTokens.filter(t => t.tokenomics === tokenomics);
+      if (search) {
+        const s = (search as string).toLowerCase();
+        allTokens = allTokens.filter(t => t.name.toLowerCase().includes(s) || t.symbol.toLowerCase().includes(s));
+      }
+      allTokens.sort((a, b) => sort === 'oldest' ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() : new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      total = allTokens.length;
+      tokens = allTokens.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+    }
+    
+    if (includePrice === 'true' && tokens.length > 0) {
+      const mints = tokens.map(t => t.mint);
+      const prices = await birdeye.getMultipleTokenPrices(mints);
+      tokens = tokens.map(token => ({
+        ...token,
+        price: prices.get(token.mint)?.price || null,
+        priceChange24h: prices.get(token.mint)?.priceChange24h || null,
+        volume24h: prices.get(token.mint)?.volume24h || null,
+        marketCap: prices.get(token.mint)?.marketCap || null,
+      }));
+    }
+    
+    res.json({ success: true, tokens, total, page: pageNum, pages: Math.ceil(total / limitNum), dataSource: USE_SUPABASE ? 'supabase' : 'memory' });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Stats Page
 app.get('/stats', (req, res) => {
+  // Check if requesting JSON
+  if (req.headers.accept?.includes('application/json') || req.query.format === 'json') {
+    const stats = calculateStats();
+    return res.json({ success: true, earnWallet: earnWallet.publicKey.toString(), network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet', ...stats });
+  }
+  
+  const statsHtml = \`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protocol Stats - Earn Protocol</title>
+  <link rel="icon" href="/logo.jpg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --bg-card: #111; --border: #1f1f1f;
+      --text: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
+      --accent: #22c55e; --pink: #f43f5e; --blue: #3b82f6; --gold: #eab308;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    
+    .header { padding: 16px 0; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; }
+    .logo span { color: var(--accent); }
+    .nav { display: flex; gap: 24px; }
+    .nav a { color: var(--text-secondary); font-weight: 500; }
+    .nav a:hover { color: var(--text); }
+    
+    .page-header { padding: 48px 0 32px; text-align: center; }
+    .page-header h1 { font-size: 2rem; margin-bottom: 8px; }
+    .page-header p { color: var(--text-secondary); }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .stat-card-icon { width: 40px; height: 40px; background: rgba(34,197,94,0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; font-size: 1.25rem; }
+    .stat-card-value { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+    .stat-card-label { color: var(--text-muted); font-size: 0.9rem; }
+    
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
+    .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .chart-card h3 { margin-bottom: 20px; font-size: 1rem; }
+    
+    .top-tokens { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+    .top-tokens h3 { margin-bottom: 20px; }
+    .token-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .token-row:last-child { border-bottom: none; }
+    .token-rank { width: 30px; font-weight: 700; color: var(--text-muted); }
+    .token-info { flex: 1; }
+    .token-name { font-weight: 500; }
+    .token-symbol { color: var(--text-muted); font-size: 0.85rem; }
+    .token-volume { text-align: right; font-weight: 600; }
+    
+    .footer { padding: 48px 0; border-top: 1px solid var(--border); text-align: center; margin-top: 60px; }
+    .footer a { color: var(--text-muted); margin: 0 16px; }
+    
+    @media (max-width: 768px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn"><span>Earn</span>Protocol</a>
+      <nav class="nav">
+        <a href="/">Launch</a>
+        <a href="/explore">Explore</a>
+        <a href="/stats" style="color:var(--text)">Stats</a>
+        <a href="/docs">API</a>
+      </nav>
+    </div>
+  </header>
+  
+  <main class="container">
+    <div class="page-header">
+      <h1>Protocol Stats</h1>
+      <p>Real-time transparency dashboard for Earn Protocol</p>
+    </div>
+    
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-card-icon">🪙</div>
+        <div class="stat-card-value" id="totalTokens">-</div>
+        <div class="stat-card-label">Total Tokens</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon">📈</div>
+        <div class="stat-card-value" id="totalVolume">-</div>
+        <div class="stat-card-label">Total Volume</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon">💰</div>
+        <div class="stat-card-value" id="totalFees">-</div>
+        <div class="stat-card-label">Fees Distributed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-card-icon">👥</div>
+        <div class="stat-card-value" id="totalAgents">-</div>
+        <div class="stat-card-label">Creators</div>
+      </div>
+    </div>
+    
+    <div class="top-tokens">
+      <h3>Top Tokens by Volume</h3>
+      <div id="topTokens">
+        <div style="text-align:center;padding:40px;color:var(--text-muted)">Loading...</div>
+      </div>
+    </div>
+  </main>
+  
+  <footer class="footer">
+    <a href="/">Home</a>
+    <a href="/docs">API</a>
+    <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
+  </footer>
+  
+  <script>
+    function formatNum(n) {
+      if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+      if (n >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+      return '$' + n.toFixed(0);
+    }
+    
+    async function loadStats() {
+      try {
+        const res = await fetch('/stats?format=json');
+        const data = await res.json();
+        
+        document.getElementById('totalTokens').textContent = data.totalLaunches || 0;
+        document.getElementById('totalVolume').textContent = data.totalVolume24h ? formatNum(data.totalVolume24h * 30) : '$0';
+        document.getElementById('totalFees').textContent = data.totalFees ? formatNum(data.totalFees) : '$0';
+        document.getElementById('totalAgents').textContent = data.totalAgents || 0;
+      } catch (e) {
+        console.error('Failed to load stats:', e);
+      }
+    }
+    
+    async function loadTopTokens() {
+      try {
+        const res = await fetch('/api/explore?includePrice=true&limit=5&sort=newest');
+        const data = await res.json();
+        
+        if (!data.tokens?.length) {
+          document.getElementById('topTokens').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No tokens yet</div>';
+          return;
+        }
+        
+        document.getElementById('topTokens').innerHTML = data.tokens.map((t, i) => \\\`
+          <div class="token-row">
+            <span class="token-rank">\\\${i + 1}</span>
+            <div class="token-info">
+              <div class="token-name">\\\${t.name}</div>
+              <div class="token-symbol">\\\${t.symbol}</div>
+            </div>
+            <div class="token-volume">\\\${t.volume24h ? formatNum(t.volume24h) : '-'}</div>
+          </div>
+        \\\`).join('');
+      } catch (e) {
+        document.getElementById('topTokens').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Failed to load</div>';
+      }
+    }
+    
+    loadStats();
+    loadTopTokens();
+  </script>
+</body>
+</html>\`;
+  res.type('text/html').send(statsHtml);
+});
+
+// Global stats API
+app.get('/api/stats', (req, res) => {
   const stats = calculateStats();
   res.json({
     success: true,
