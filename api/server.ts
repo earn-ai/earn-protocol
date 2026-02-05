@@ -539,6 +539,262 @@ app.get('/logo.jpg', (req, res) => {
   res.sendFile('earn-logo.jpg', { root: __dirname });
 });
 
+// ============ AI AGENT DISCOVERY ============
+
+// OpenAI Plugin Manifest
+app.get('/.well-known/ai-plugin.json', (req, res) => {
+  res.json({
+    schema_version: "v1",
+    name_for_human: "Earn Protocol",
+    name_for_model: "earn_protocol",
+    description_for_human: "Launch tokens on Pump.fun with automatic fee sharing, buybacks, and staking rewards.",
+    description_for_model: "Earn Protocol API for launching tokens on Solana/Pump.fun. Use this to: 1) Launch new tokens with POST /launch, 2) Get token listings with GET /explore, 3) Get protocol stats with GET /stats, 4) Get token details with GET /token/:mint. All tokens launched through Earn automatically have fee distribution to creators, stakers, and buybacks.",
+    auth: { type: "none" },
+    api: {
+      type: "openapi",
+      url: "https://api.earn.supply/openapi.json"
+    },
+    logo_url: "https://api.earn.supply/logo.jpg",
+    contact_email: "support@earn.supply",
+    legal_info_url: "https://earn.supply/terms"
+  });
+});
+
+// OpenAPI Specification
+app.get('/openapi.json', (req, res) => {
+  res.json({
+    openapi: "3.0.0",
+    info: {
+      title: "Earn Protocol API",
+      version: "1.0.0",
+      description: "Launch tokens on Pump.fun with automatic tokenomics. Fee sharing, buybacks, and staking rewards built-in.",
+      contact: { email: "support@earn.supply", url: "https://earn.supply" }
+    },
+    servers: [{ url: "https://api.earn.supply", description: "Production" }],
+    paths: {
+      "/launch": {
+        post: {
+          summary: "Launch a new token",
+          description: "Create a new token on Pump.fun with automatic fee distribution",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name", "ticker", "image", "tokenomics"],
+                  properties: {
+                    name: { type: "string", description: "Token name (2-32 chars)", example: "My Token" },
+                    ticker: { type: "string", description: "Token symbol (2-10 chars)", example: "MTK" },
+                    image: { type: "string", description: "Image URL or base64", example: "https://example.com/logo.png" },
+                    tokenomics: { type: "string", enum: ["degen", "creator", "community", "lowfee"], description: "Fee distribution template" },
+                    agentWallet: { type: "string", description: "Creator wallet (optional, defaults to Earn wallet)" },
+                    description: { type: "string", description: "Token description" }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            "200": {
+              description: "Token launched successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      mint: { type: "string", description: "Token mint address" },
+                      name: { type: "string" },
+                      symbol: { type: "string" },
+                      pumpfun: { type: "string", description: "Pump.fun URL" },
+                      txSignature: { type: "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/explore": {
+        get: {
+          summary: "List all tokens",
+          description: "Get paginated list of tokens with optional filtering and price data",
+          parameters: [
+            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+            { name: "limit", in: "query", schema: { type: "integer", default: 20, maximum: 100 } },
+            { name: "tokenomics", in: "query", schema: { type: "string", enum: ["degen", "creator", "community", "lowfee"] } },
+            { name: "search", in: "query", schema: { type: "string" } },
+            { name: "sort", in: "query", schema: { type: "string", enum: ["newest", "oldest", "volume"] } },
+            { name: "includePrice", in: "query", schema: { type: "boolean", default: true } }
+          ],
+          responses: {
+            "200": {
+              description: "Token list",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      tokens: { type: "array", items: { $ref: "#/components/schemas/Token" } },
+                      total: { type: "integer" },
+                      page: { type: "integer" },
+                      pages: { type: "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/stats": {
+        get: {
+          summary: "Protocol statistics",
+          description: "Get overall protocol stats including total tokens, volume, and fees",
+          responses: {
+            "200": {
+              description: "Protocol stats",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      totalLaunches: { type: "integer" },
+                      totalAgents: { type: "integer" },
+                      totalVolume24h: { type: "number" },
+                      earnWallet: { type: "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/token/{mint}": {
+        get: {
+          summary: "Token details",
+          description: "Get detailed information about a specific token",
+          parameters: [
+            { name: "mint", in: "path", required: true, schema: { type: "string" }, description: "Token mint address" }
+          ],
+          responses: {
+            "200": {
+              description: "Token details",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/Token" } } }
+            },
+            "404": { description: "Token not found" }
+          }
+        }
+      },
+      "/health": {
+        get: {
+          summary: "API health check",
+          responses: { "200": { description: "API is healthy" } }
+        }
+      }
+    },
+    components: {
+      schemas: {
+        Token: {
+          type: "object",
+          properties: {
+            mint: { type: "string" },
+            name: { type: "string" },
+            symbol: { type: "string" },
+            uri: { type: "string" },
+            tokenomics: { type: "string" },
+            agent_wallet: { type: "string" },
+            agent_cut_bps: { type: "integer" },
+            earn_cut_bps: { type: "integer" },
+            staking_cut_bps: { type: "integer" },
+            created_at: { type: "string", format: "date-time" },
+            price: { type: "number", nullable: true },
+            volume24h: { type: "number", nullable: true },
+            marketCap: { type: "number", nullable: true }
+          }
+        }
+      }
+    }
+  });
+});
+
+// LLM-friendly plain text description
+app.get('/llm.txt', (req, res) => {
+  res.type('text/plain').send(`# Earn Protocol API
+
+## What is this?
+Earn Protocol lets you launch tokens on Pump.fun (Solana) with automatic:
+- Fee distribution to creators
+- Token buybacks (price floor protection)
+- Staking rewards for holders
+
+## Quick Start
+Launch a token with one API call:
+
+curl -X POST https://api.earn.supply/launch \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "My Token",
+    "ticker": "MTK",
+    "image": "https://example.com/logo.png",
+    "tokenomics": "degen"
+  }'
+
+## Endpoints
+
+### POST /launch
+Create a new token. Required: name, ticker, image, tokenomics.
+Tokenomics options: degen (40/30/30), creator (50/25/25), community (25/25/50)
+
+### GET /explore
+List all tokens. Optional params: page, limit, tokenomics, search, includePrice
+
+### GET /stats
+Protocol statistics: total tokens, volume, fees distributed
+
+### GET /token/:mint
+Get details for a specific token by mint address
+
+### GET /health
+Check API status
+
+## Response Format
+All endpoints return JSON with { success: boolean, ...data }
+
+## Rate Limits
+10 requests per minute per IP
+
+## No Authentication Required
+All endpoints are public.
+
+## More Info
+- Website: https://earn.supply
+- GitHub: https://github.com/earn-ai/earn-protocol
+- OpenAPI Spec: https://api.earn.supply/openapi.json
+`);
+});
+
+// Robots.txt with AI agent hints
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send(`User-agent: *
+Allow: /
+
+# AI Agent Discovery
+# OpenAPI Spec: https://api.earn.supply/openapi.json
+# AI Plugin: https://api.earn.supply/.well-known/ai-plugin.json
+# LLM Info: https://api.earn.supply/llm.txt
+# API Docs: https://api.earn.supply/docs
+
+# This is a public API for launching tokens on Pump.fun/Solana
+# No authentication required
+`);
+});
+
 // Skill.md for agents
 app.get('/skill.md', (req, res) => {
   res.type('text/markdown').send(SKILL_MD);
@@ -556,14 +812,14 @@ app.get('/', (req, res) => {
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
-    a { color: #ef4444; text-decoration: none; }
+    a { color: #00FF88; text-decoration: none; }
     a:hover { text-decoration: underline; }
     
     /* Header */
     .header { padding: 1.5rem 2rem; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; justify-content: space-between; }
     .logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 700; }
     .logo img { width: 40px; height: 40px; border-radius: 8px; }
-    .logo span { color: #ef4444; }
+    .logo span { color: #00FF88; }
     .nav { display: flex; gap: 2rem; }
     .nav a { color: #888; font-weight: 500; }
     .nav a:hover, .nav a.active { color: #fff; text-decoration: none; }
@@ -571,13 +827,13 @@ app.get('/', (req, res) => {
     /* Hero */
     .hero { text-align: center; padding: 4rem 2rem 3rem; }
     .hero h1 { font-size: 3rem; margin-bottom: 1rem; }
-    .hero h1 span { color: #ef4444; }
+    .hero h1 span { color: #00FF88; }
     .hero p { color: #888; font-size: 1.25rem; max-width: 600px; margin: 0 auto; }
     
     /* Stats Bar */
     .stats-bar { display: flex; justify-content: center; gap: 3rem; padding: 2rem; background: #111; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
     .stat { text-align: center; }
-    .stat-value { font-size: 2rem; font-weight: 700; color: #ef4444; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: #00FF88; }
     .stat-label { color: #666; font-size: 0.85rem; margin-top: 0.25rem; }
     
     /* Main Content */
@@ -588,7 +844,7 @@ app.get('/', (req, res) => {
     .tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #222; }
     .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
     .tab:hover { color: #fff; }
-    .tab.active { color: #ef4444; border-bottom-color: #ef4444; }
+    .tab.active { color: #00FF88; border-bottom-color: #00FF88; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     
@@ -604,7 +860,7 @@ app.get('/', (req, res) => {
     .token-stat-label { color: #666; font-size: 0.75rem; }
     .token-stat-value { font-weight: 500; }
     .token-stat-value.positive { color: #22c55e; }
-    .token-stat-value.negative { color: #ef4444; }
+    .token-stat-value.negative { color: #00FF88; }
     .token-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
     .token-badge.degen { background: #7c3aed20; color: #a78bfa; }
     .token-badge.creator { background: #f59e0b20; color: #fbbf24; }
@@ -615,20 +871,20 @@ app.get('/', (req, res) => {
     .form-group { margin-bottom: 1.5rem; }
     label { display: block; margin-bottom: 0.5rem; color: #ccc; font-size: 0.9rem; }
     input, select, textarea { width: 100%; padding: 0.875rem; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #fff; font-size: 1rem; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #ef4444; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #00FF88; }
     .optional { color: #666; font-size: 0.8rem; }
-    button { width: 100%; padding: 1rem; background: #ef4444; color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: 600; cursor: pointer; }
-    button:hover { background: #dc2626; }
+    button { width: 100%; padding: 1rem; background: #00FF88; color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: 600; cursor: pointer; }
+    button:hover { background: #00cc6a; }
     button:disabled { background: #666; cursor: not-allowed; }
     .result { margin-top: 1.5rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; display: none; }
     .result.show { display: block; }
     .result.success { border: 1px solid #22c55e; }
-    .result.error { border: 1px solid #ef4444; }
+    .result.error { border: 1px solid #00FF88; }
     pre { overflow-x: auto; font-size: 0.85rem; white-space: pre-wrap; }
     
     /* Loading */
     .loading { text-align: center; padding: 3rem; color: #666; }
-    .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid #333; border-top-color: #ef4444; border-radius: 50%; animation: spin 1s linear infinite; }
+    .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid #333; border-top-color: #00FF88; border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     
     /* Empty State */
@@ -642,7 +898,7 @@ app.get('/', (req, res) => {
     /* How It Works */
     .how-it-works { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin: 2rem 0; }
     .step { text-align: center; padding: 1.5rem; background: #111; border-radius: 12px; border: 1px solid #222; }
-    .step-num { width: 32px; height: 32px; background: #ef4444; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 0.75rem; }
+    .step-num { width: 32px; height: 32px; background: #00FF88; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 0.75rem; }
     .step h4 { margin-bottom: 0.5rem; }
     .step p { color: #888; font-size: 0.85rem; }
     
@@ -784,7 +1040,7 @@ app.get('/', (req, res) => {
           <tr style="border-bottom: 1px solid #222;">
             <th style="text-align: left; padding: 0.75rem 0; color: #888;">Plan</th>
             <th style="text-align: center; padding: 0.75rem 0; color: #22c55e;">You</th>
-            <th style="text-align: center; padding: 0.75rem 0; color: #ef4444;">Earn</th>
+            <th style="text-align: center; padding: 0.75rem 0; color: #00FF88;">Earn</th>
             <th style="text-align: center; padding: 0.75rem 0; color: #3b82f6;">Stakers</th>
           </tr>
           <tr style="border-bottom: 1px solid #222;">
@@ -817,7 +1073,7 @@ app.get('/', (req, res) => {
       <a href="/explore">Explore API</a>
       <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
     </div>
-    <p>Earn Wallet: <code style="color: #ef4444;">${earnWallet?.publicKey?.toString() || 'Loading...'}</code></p>
+    <p>Earn Wallet: <code style="color: #00FF88;">${earnWallet?.publicKey?.toString() || 'Loading...'}</code></p>
   </footer>
   
   <script>
@@ -970,6 +1226,276 @@ app.get('/', (req, res) => {
 </body>
 </html>`;
   res.type('text/html').send(html);
+});
+
+// API Documentation page
+app.get('/docs', (req, res) => {
+  const docsHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Docs - Earn Protocol</title>
+  <link rel="icon" href="/logo.jpg">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e4e4e7; min-height: 100vh; line-height: 1.6; }
+    a { color: #00FF88; }
+    code { background: #1a1a1a; padding: 0.2em 0.4em; border-radius: 4px; font-size: 0.9em; font-family: 'JetBrains Mono', monospace; }
+    pre { background: #111; border: 1px solid #27272a; border-radius: 8px; padding: 1rem; overflow-x: auto; margin: 1rem 0; }
+    pre code { background: none; padding: 0; }
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
+    .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid #27272a; }
+    .header img { width: 48px; height: 48px; border-radius: 10px; }
+    .header h1 { font-size: 1.75rem; color: #fff; }
+    .header h1 span { color: #00FF88; }
+    .nav-links { margin-left: auto; display: flex; gap: 1.5rem; }
+    .nav-links a { color: #a1a1aa; text-decoration: none; }
+    .nav-links a:hover { color: #fff; }
+    .section { margin-bottom: 3rem; }
+    h2 { color: #fff; font-size: 1.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #27272a; }
+    h3 { color: #00FF88; font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+    .endpoint { background: #111; border: 1px solid #27272a; border-radius: 12px; padding: 1.5rem; margin: 1rem 0; }
+    .endpoint-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+    .method { padding: 0.25rem 0.75rem; border-radius: 4px; font-weight: 600; font-size: 0.8rem; }
+    .method.get { background: #22c55e20; color: #22c55e; }
+    .method.post { background: #3b82f620; color: #60a5fa; }
+    .endpoint-path { font-family: 'JetBrains Mono', monospace; color: #fff; }
+    .endpoint-desc { color: #a1a1aa; margin-bottom: 1rem; }
+    .params { margin-top: 1rem; }
+    .param { display: grid; grid-template-columns: 120px 80px 1fr; gap: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #1a1a1a; }
+    .param:last-child { border-bottom: none; }
+    .param-name { font-family: monospace; color: #00FF88; }
+    .param-type { color: #a1a1aa; font-size: 0.85rem; }
+    .param-desc { color: #71717a; font-size: 0.9rem; }
+    .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem; }
+    .badge.required { background: #00FF8820; color: #f87171; }
+    .badge.optional { background: #3b82f620; color: #60a5fa; }
+    .example { margin-top: 1rem; }
+    .example-label { color: #a1a1aa; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .quick-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 2rem 0; }
+    .quick-link { background: #111; border: 1px solid #27272a; border-radius: 8px; padding: 1rem; text-decoration: none; transition: border-color 0.2s; }
+    .quick-link:hover { border-color: #00FF88; }
+    .quick-link-title { color: #fff; font-weight: 600; margin-bottom: 0.25rem; }
+    .quick-link-desc { color: #71717a; font-size: 0.85rem; }
+    .footer { text-align: center; padding: 2rem; border-top: 1px solid #27272a; color: #52525b; font-size: 0.85rem; margin-top: 3rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <img src="/logo.jpg" alt="Earn">
+      <h1><span>Earn</span> Protocol API</h1>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/openapi.json">OpenAPI</a>
+        <a href="/llm.txt">LLM.txt</a>
+        <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
+      </nav>
+    </header>
+
+    <section class="section">
+      <h2>🤖 AI Agent Quick Start</h2>
+      <p>Integrate Earn Protocol into your AI agent in seconds:</p>
+      <div class="quick-links">
+        <a href="/.well-known/ai-plugin.json" class="quick-link">
+          <div class="quick-link-title">ai-plugin.json</div>
+          <div class="quick-link-desc">OpenAI plugin manifest</div>
+        </a>
+        <a href="/openapi.json" class="quick-link">
+          <div class="quick-link-title">openapi.json</div>
+          <div class="quick-link-desc">Full API specification</div>
+        </a>
+        <a href="/llm.txt" class="quick-link">
+          <div class="quick-link-title">llm.txt</div>
+          <div class="quick-link-desc">Plain text for LLMs</div>
+        </a>
+        <a href="/skill.md" class="quick-link">
+          <div class="quick-link-title">skill.md</div>
+          <div class="quick-link-desc">Agent skill file</div>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>📡 Base URL</h2>
+      <pre><code>https://api.earn.supply</code></pre>
+      <p style="margin-top:1rem;color:#71717a;">All endpoints return JSON. No authentication required.</p>
+    </section>
+
+    <section class="section">
+      <h2>🚀 Launch Token</h2>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method post">POST</span>
+          <span class="endpoint-path">/launch</span>
+        </div>
+        <p class="endpoint-desc">Create a new token on Pump.fun with automatic fee distribution.</p>
+        
+        <h3>Parameters</h3>
+        <div class="params">
+          <div class="param">
+            <span class="param-name">name</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">Token name (2-32 chars) <span class="badge required">required</span></span>
+          </div>
+          <div class="param">
+            <span class="param-name">ticker</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">Symbol (2-10 chars) <span class="badge required">required</span></span>
+          </div>
+          <div class="param">
+            <span class="param-name">image</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">URL or base64 <span class="badge required">required</span></span>
+          </div>
+          <div class="param">
+            <span class="param-name">tokenomics</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">degen | creator | community | lowfee <span class="badge required">required</span></span>
+          </div>
+          <div class="param">
+            <span class="param-name">agentWallet</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">Creator wallet address <span class="badge optional">optional</span></span>
+          </div>
+        </div>
+        
+        <div class="example">
+          <div class="example-label">Example Request</div>
+          <pre><code>curl -X POST https://api.earn.supply/launch \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "name": "My Token",
+    "ticker": "MTK",
+    "image": "https://example.com/logo.png",
+    "tokenomics": "degen"
+  }'</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>🔍 Explore Tokens</h2>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/explore</span>
+        </div>
+        <p class="endpoint-desc">List all tokens with filtering and price data.</p>
+        
+        <h3>Query Parameters</h3>
+        <div class="params">
+          <div class="param">
+            <span class="param-name">page</span>
+            <span class="param-type">number</span>
+            <span class="param-desc">Page number (default: 1)</span>
+          </div>
+          <div class="param">
+            <span class="param-name">limit</span>
+            <span class="param-type">number</span>
+            <span class="param-desc">Results per page (max: 100)</span>
+          </div>
+          <div class="param">
+            <span class="param-name">tokenomics</span>
+            <span class="param-type">string</span>
+            <span class="param-desc">Filter by template</span>
+          </div>
+          <div class="param">
+            <span class="param-name">includePrice</span>
+            <span class="param-type">boolean</span>
+            <span class="param-desc">Include price data (default: true)</span>
+          </div>
+        </div>
+        
+        <div class="example">
+          <div class="example-label">Example</div>
+          <pre><code>curl "https://api.earn.supply/explore?limit=10&includePrice=true"</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>📊 Protocol Stats</h2>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/stats</span>
+        </div>
+        <p class="endpoint-desc">Get protocol-wide statistics.</p>
+        <div class="example">
+          <pre><code>curl https://api.earn.supply/stats</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>🪙 Token Details</h2>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/token/:mint</span>
+        </div>
+        <p class="endpoint-desc">Get details for a specific token.</p>
+        <div class="example">
+          <pre><code>curl https://api.earn.supply/token/BjY6brpbzurwVkeMWkpaioZU1F4pzSGMwDcs7MxFhidY</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>💎 Staking Endpoints</h2>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/stake/pools</span>
+        </div>
+        <p class="endpoint-desc">List all staking pools.</p>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/stake/pool/:mint</span>
+        </div>
+        <p class="endpoint-desc">Get staking pool details for a token.</p>
+      </div>
+      <div class="endpoint">
+        <div class="endpoint-header">
+          <span class="method get">GET</span>
+          <span class="endpoint-path">/stake/user/:wallet</span>
+        </div>
+        <p class="endpoint-desc">Get staking positions for a wallet.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>⚡ Rate Limits</h2>
+      <p>10 requests per minute per IP address. Exceeding this returns <code>429 Too Many Requests</code>.</p>
+    </section>
+
+    <section class="section">
+      <h2>📋 Tokenomics Templates</h2>
+      <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
+        <tr style="border-bottom:1px solid #27272a;">
+          <th style="text-align:left;padding:0.75rem;color:#a1a1aa;">Template</th>
+          <th style="text-align:center;padding:0.75rem;color:#22c55e;">Creator</th>
+          <th style="text-align:center;padding:0.75rem;color:#00FF88;">Earn</th>
+          <th style="text-align:center;padding:0.75rem;color:#60a5fa;">Stakers</th>
+        </tr>
+        <tr style="border-bottom:1px solid #1a1a1a;"><td style="padding:0.75rem;">🎰 degen</td><td style="text-align:center;">40%</td><td style="text-align:center;">30%</td><td style="text-align:center;">30%</td></tr>
+        <tr style="border-bottom:1px solid #1a1a1a;"><td style="padding:0.75rem;">🎨 creator</td><td style="text-align:center;">50%</td><td style="text-align:center;">25%</td><td style="text-align:center;">25%</td></tr>
+        <tr style="border-bottom:1px solid #1a1a1a;"><td style="padding:0.75rem;">🏛️ community</td><td style="text-align:center;">25%</td><td style="text-align:center;">25%</td><td style="text-align:center;">50%</td></tr>
+        <tr><td style="padding:0.75rem;">💰 lowfee</td><td style="text-align:center;">40%</td><td style="text-align:center;">30%</td><td style="text-align:center;">30%</td></tr>
+      </table>
+    </section>
+
+    <footer class="footer">
+      <p>Earn Protocol API v1.0 • <a href="https://earn.supply">earn.supply</a> • <a href="https://github.com/earn-ai/earn-protocol">GitHub</a></p>
+    </footer>
+  </div>
+</body>
+</html>`;
+  res.type('text/html').send(docsHtml);
 });
 
 // Global stats
