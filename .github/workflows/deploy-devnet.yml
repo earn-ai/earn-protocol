@@ -1,48 +1,58 @@
-name: Build and Test
+name: Deploy to Devnet
 
 on:
+  workflow_dispatch:  # Manual trigger
   push:
     branches: [main]
-  workflow_dispatch:
+    paths:
+      - 'programs/**'
+
+env:
+  SOLANA_VERSION: '1.18.17'
+  ANCHOR_VERSION: '0.30.1'
 
 jobs:
-  build-api:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      
-      - name: Install dependencies
-        run: npm ci || npm install
-      
-      - name: Type check
-        run: npx tsc --noEmit
-      
-      - name: Build
-        run: npm run build
-      
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
 
-  # Anchor build disabled for now - needs longer CI timeout
-  # Re-enable when ready for mainnet deployment
-  # build-anchor:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - name: Install Solana CLI
-  #       run: |
-  #         sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.17/install)"
-  #         echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-  #     - name: Install Anchor
-  #       run: cargo install --git https://github.com/coral-xyz/anchor anchor-cli --locked
-  #     - name: Build
-  #       run: anchor build
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v${{ env.SOLANA_VERSION }}/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v${{ env.ANCHOR_VERSION }} anchor-cli --locked
+
+      - name: Setup Deploy Wallet
+        run: |
+          echo '${{ secrets.DEPLOY_WALLET }}' > /tmp/deploy-wallet.json
+          solana config set --keypair /tmp/deploy-wallet.json
+          solana config set --url devnet
+
+      - name: Build Program
+        run: anchor build
+
+      - name: Deploy to Devnet
+        run: |
+          solana airdrop 2 --url devnet || true
+          anchor deploy --provider.cluster devnet
+
+      - name: Verify Deployment
+        run: |
+          solana program show E7JsJuQWGaEYC34AkEv8dcmkKUxR1KqUnje17mNCuTiY --url devnet
