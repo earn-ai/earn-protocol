@@ -902,6 +902,17 @@ app.get('/', (req, res) => {
     .step h4 { margin-bottom: 0.5rem; }
     .step p { color: #888; font-size: 0.85rem; }
     
+    /* Hero CTA Buttons */
+    .hero-cta { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; background: #00FF88; color: #000; font-weight: 700; font-size: 1.1rem; border-radius: 12px; text-decoration: none; transition: all 0.2s; }
+    .btn-primary:hover { background: #00cc6a; transform: translateY(-2px); text-decoration: none; }
+    .btn-secondary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; background: transparent; color: #fff; font-weight: 600; font-size: 1rem; border: 1px solid #333; border-radius: 12px; text-decoration: none; transition: all 0.2s; }
+    .btn-secondary:hover { border-color: #00FF88; color: #00FF88; text-decoration: none; }
+    
+    /* Nav Primary Button */
+    .nav-primary { background: #00FF88 !important; color: #000 !important; padding: 0.5rem 1rem !important; border-radius: 8px; font-weight: 600 !important; }
+    .nav-primary:hover { background: #00cc6a !important; }
+    
     @media (max-width: 768px) {
       .how-it-works { grid-template-columns: 1fr 1fr; }
       .stats-bar { flex-wrap: wrap; gap: 1.5rem; }
@@ -916,10 +927,9 @@ app.get('/', (req, res) => {
       <span>Earn</span> Protocol
     </div>
     <nav class="nav">
-      <a href="#explore" class="active">Explore</a>
-      <a href="#launch">Launch</a>
-      <a href="#stake">Stake</a>
-      <a href="/skill.md">API Docs</a>
+      <a href="#launch" class="nav-primary">🚀 Launch Token</a>
+      <a href="#explore">Explore</a>
+      <a href="/docs">API Docs</a>
       <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
     </nav>
   </header>
@@ -927,6 +937,10 @@ app.get('/', (req, res) => {
   <section class="hero">
     <h1>Launch Tokens. <span>Earn</span> Forever.</h1>
     <p>Create tokens on Pump.fun with automatic fee sharing. You earn from every trade, forever.</p>
+    <div class="hero-cta">
+      <a href="#launch" class="btn-primary" onclick="switchTab('launch')">🚀 Launch Token</a>
+      <a href="#explore" class="btn-secondary" onclick="switchTab('explore')">Explore Tokens →</a>
+    </div>
   </section>
   
   <section class="stats-bar" id="statsBar">
@@ -950,20 +964,13 @@ app.get('/', (req, res) => {
   
   <main class="main">
     <div class="tabs">
-      <div class="tab active" data-tab="explore">🔥 Explore Tokens</div>
-      <div class="tab" data-tab="launch">🚀 Launch Token</div>
+      <div class="tab active" data-tab="launch">🚀 Launch Token</div>
+      <div class="tab" data-tab="explore">🔥 Explore Tokens</div>
       <div class="tab" data-tab="how">❓ How It Works</div>
     </div>
     
-    <!-- Explore Tab -->
-    <div class="tab-content active" id="explore">
-      <div id="tokenList" class="token-grid">
-        <div class="loading"><span class="spinner"></span><p>Loading tokens...</p></div>
-      </div>
-    </div>
-    
-    <!-- Launch Tab -->
-    <div class="tab-content" id="launch">
+    <!-- Launch Tab (Primary) -->
+    <div class="tab-content active" id="launch">
       <div class="launch-section">
         <form id="launchForm">
           <div class="form-group">
@@ -1006,6 +1013,13 @@ app.get('/', (req, res) => {
         <div id="result" class="result">
           <pre id="resultContent"></pre>
         </div>
+      </div>
+    </div>
+    
+    <!-- Explore Tab -->
+    <div class="tab-content" id="explore">
+      <div id="tokenList" class="token-grid">
+        <div class="loading"><span class="spinner"></span><p>Loading tokens...</p></div>
       </div>
     </div>
     
@@ -1077,13 +1091,18 @@ app.get('/', (req, res) => {
   </footer>
   
   <script>
+    // Switch tab function (for CTA buttons)
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.querySelector(\`[data-tab="\${tabId}"]\`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+    
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(tab.dataset.tab).classList.add('active');
+        switchTab(tab.dataset.tab);
       });
     });
     
