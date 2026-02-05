@@ -521,6 +521,19 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Debug endpoint - check env vars
+app.get('/debug', (req, res) => {
+  res.json({
+    hasSupabaseUrl: !!process.env.SUPABASE_URL,
+    hasSupabaseKey: !!process.env.SUPABASE_KEY,
+    hasEarnWalletKey: !!process.env.EARN_WALLET_KEY,
+    supabaseConfigured: USE_SUPABASE,
+    birdeyeConfigured: USE_BIRDEYE,
+    isServerless: IS_SERVERLESS,
+    nodeEnv: process.env.NODE_ENV,
+  });
+});
+
 // Serve logo
 app.get('/logo.jpg', (req, res) => {
   res.sendFile('earn-logo.jpg', { root: __dirname });
