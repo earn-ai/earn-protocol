@@ -800,222 +800,151 @@ app.get('/skill.md', (req, res) => {
   res.type('text/markdown').send(SKILL_MD);
 });
 
-// Premium landing page matching earn.supply design
+// Premium launch page - AI-first design
 app.get('/', (req, res) => {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Earn Protocol | Launch Tokens, Earn Forever</title>
-  <meta name="description" content="Launch tokens on Pump.fun with automatic fee sharing, buybacks, and staking rewards. One API call.">
+  <title>Launch Token - Earn Protocol</title>
   <link rel="icon" href="/logo.jpg">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    
     :root {
-      --bg-primary: #0a0a0a;
-      --bg-secondary: #111111;
-      --bg-card: #0f0f0f;
-      --border: #1f1f1f;
-      --border-hover: #2a2a2a;
-      --text-primary: #fafafa;
-      --text-secondary: #a1a1aa;
-      --text-muted: #71717a;
-      --accent: #22c55e;
-      --accent-hover: #16a34a;
-      --accent-glow: rgba(34, 197, 94, 0.15);
-      --pink: #f43f5e;
-      --blue: #3b82f6;
-      --gold: #eab308;
-      --purple: #a855f7;
+      --bg: #0a0a0a; --bg-secondary: #111; --bg-card: #0f0f0f;
+      --border: #1f1f1f; --border-hover: #333;
+      --text: #fafafa; --text-secondary: #a1a1aa; --text-muted: #71717a;
+      --accent: #22c55e; --accent-hover: #16a34a; --accent-glow: rgba(34, 197, 94, 0.2);
+      --pink: #f43f5e; --blue: #3b82f6; --gold: #eab308; --purple: #a855f7;
     }
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-    
-    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
-    a:hover { color: var(--accent-hover); }
-    
-    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
     
     /* Header */
-    .header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      padding: 16px 0;
-      background: rgba(10, 10, 10, 0.8);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-    }
-    .header-inner { display: flex; align-items: center; justify-content: space-between; }
-    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; }
-    .logo img { width: 36px; height: 36px; border-radius: 8px; }
+    .header { padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); position: sticky; top: 0; z-index: 100; }
+    .logo { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
     .logo span { color: var(--accent); }
-    .nav { display: flex; align-items: center; gap: 32px; }
+    .nav { display: flex; gap: 24px; }
     .nav a { color: var(--text-secondary); font-weight: 500; font-size: 0.95rem; }
-    .nav a:hover { color: var(--text-primary); }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; transition: all 0.2s; }
-    .btn-primary { background: var(--accent); color: #000; }
-    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); color: #000; }
-    .btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .nav a:hover { color: var(--text); }
     
-    /* Hero */
-    .hero {
-      padding: 100px 0 80px;
-      text-align: center;
-      background: radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-glow), transparent);
-    }
-    .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4rem);
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 20px;
-      background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .hero h1 em { font-style: normal; color: var(--accent); -webkit-text-fill-color: var(--accent); }
-    .hero p { font-size: 1.25rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto 40px; }
-    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .hero .btn-primary { padding: 14px 32px; font-size: 1.1rem; }
-    .hero .btn-secondary { padding: 14px 32px; font-size: 1.1rem; }
+    /* Main Layout */
+    .main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
     
-    /* Cards */
-    .card {
-      background: var(--bg-card);
+    /* AI Banner */
+    .ai-banner {
+      background: var(--bg-secondary);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      transition: all 0.3s;
-    }
-    .card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
-    
-    /* Section */
-    .section { padding: 80px 0; }
-    .section-header { text-align: center; margin-bottom: 48px; }
-    .section-header h2 { font-size: 2rem; font-weight: 700; margin-bottom: 12px; }
-    .section-header p { color: var(--text-secondary); font-size: 1.1rem; }
-    
-    /* How It Works */
-    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
-    .step { text-align: center; }
-    .step-num {
-      width: 48px; height: 48px;
-      background: var(--accent);
-      color: #000;
       border-radius: 12px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 1.25rem;
-      margin-bottom: 16px;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      font-family: 'JetBrains Mono', monospace;
     }
-    .step h3 { font-size: 1.1rem; margin-bottom: 8px; }
-    .step p { color: var(--text-muted); font-size: 0.9rem; }
-    
-    /* Templates */
-    .templates { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-    .template-card {
-      background: linear-gradient(145deg, var(--bg-card), #0a0a0a);
+    .ai-banner-title { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 0.9rem; color: var(--text-secondary); }
+    .ai-banner-code {
+      background: #0a0a0a;
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      transition: all 0.3s;
-      cursor: pointer;
-      position: relative;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.9rem;
+      color: var(--accent);
+      overflow-x: auto;
     }
-    .template-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 16px;
-      padding: 1px;
-      background: linear-gradient(145deg, transparent, transparent);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      transition: all 0.3s;
-    }
-    .template-card:hover { 
-      border-color: var(--accent); 
-      transform: translateY(-4px);
-      box-shadow: 0 20px 40px -12px rgba(34, 197, 94, 0.25);
-    }
-    .template-card:hover::before {
-      background: linear-gradient(145deg, var(--accent), transparent);
-    }
-    .template-card h3 { font-size: 1.25rem; margin-bottom: 8px; }
-    .template-card .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
-    .template-card .fee { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: 16px; }
-    .template-card .fee span { font-size: 1rem; color: var(--text-muted); font-weight: 400; }
-    .template-splits { display: flex; flex-direction: column; gap: 8px; }
-    .template-split { display: flex; justify-content: space-between; font-size: 0.85rem; }
-    .template-split-label { color: var(--text-muted); }
-    .template-split-value { font-weight: 600; }
-    .template-badge { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-top: 16px; }
-    .template-badge.degen { background: var(--pink); color: #fff; }
-    .template-badge.creator { background: var(--accent); color: #000; }
-    .template-badge.community { background: var(--blue); color: #fff; }
-    .template-badge.lowfee { background: var(--gold); color: #000; }
+    .ai-banner-links { margin-top: 12px; font-size: 0.85rem; color: var(--text-muted); }
+    .ai-banner-links a { color: var(--text-secondary); margin-right: 16px; }
+    .ai-banner-links a:hover { color: var(--accent); }
     
-    /* Features */
-    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-    .feature-card {
+    /* Section Title */
+    .section-title { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px; }
+    
+    /* Two Column Layout */
+    .launch-grid { display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: start; }
+    @media (max-width: 900px) { .launch-grid { grid-template-columns: 1fr; } }
+    
+    /* Form */
+    .form-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 28px;
-      transition: all 0.3s;
     }
-    .feature-card:hover { border-color: var(--border-hover); }
-    .feature-icon {
-      width: 48px; height: 48px;
-      background: var(--accent-glow);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 16px;
-      font-size: 1.5rem;
-    }
-    .feature-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
-    .feature-card p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
-    
-    /* Launch Form */
-    .launch-section { background: var(--bg-secondary); border-top: 1px solid var(--border); }
-    .launch-inner { max-width: 500px; margin: 0 auto; }
-    .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.95rem; }
+    .form-row { display: flex; gap: 16px; margin-bottom: 20px; }
+    .form-group { flex: 1; }
+    .form-group.small { flex: 0 0 30%; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary); }
     .form-group label span { color: var(--text-muted); font-weight: 400; }
     .form-input {
       width: 100%;
-      padding: 14px 16px;
-      background: var(--bg-primary);
+      padding: 12px 14px;
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 10px;
-      color: var(--text-primary);
-      font-size: 1rem;
+      color: var(--text);
+      font-size: 0.95rem;
       transition: all 0.2s;
     }
     .form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
     .form-input::placeholder { color: var(--text-muted); }
-    select.form-input { cursor: pointer; }
-    textarea.form-input { resize: vertical; min-height: 80px; }
-    .form-submit {
+    textarea.form-input { resize: none; height: 60px; }
+    
+    /* Image Upload - Circular */
+    .image-upload-container { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }
+    .image-upload {
+      width: 100px; height: 100px;
+      border: 2px dashed var(--border);
+      border-radius: 50%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+    }
+    .image-upload:hover { border-color: var(--accent); background: rgba(34, 197, 94, 0.05); }
+    .image-upload.has-image { border-style: solid; border-color: var(--accent); }
+    .image-upload-icon { font-size: 1.5rem; margin-bottom: 4px; }
+    .image-upload-text { font-size: 0.7rem; color: var(--text-muted); }
+    .image-upload input { display: none; }
+    .image-preview { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .image-upload-info { flex: 1; }
+    .image-upload-info p { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .image-upload-info small { font-size: 0.75rem; color: var(--text-muted); }
+    .image-url-link { font-size: 0.8rem; color: var(--accent); cursor: pointer; margin-top: 8px; display: inline-block; }
+    .image-url-input { margin-top: 8px; display: none; }
+    .image-url-input.show { display: block; }
+    
+    /* Tokenomics Cards */
+    .tokenomics-label { font-size: 0.85rem; font-weight: 500; margin-bottom: 12px; color: var(--text-secondary); }
+    .tokenomics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .tokenomics-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tokenomics-card:hover { border-color: var(--border-hover); }
+    .tokenomics-card.selected { border-color: var(--accent); background: rgba(34, 197, 94, 0.08); box-shadow: 0 0 20px -5px var(--accent-glow); }
+    .tokenomics-card-icon { font-size: 1.5rem; margin-bottom: 6px; }
+    .tokenomics-card-name { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; }
+    .tokenomics-card-split { font-size: 0.7rem; color: var(--text-muted); }
+    .tokenomics-card.selected .tokenomics-card-name { color: var(--accent); }
+    
+    /* Advanced Toggle */
+    .advanced-toggle { font-size: 0.85rem; color: var(--text-muted); cursor: pointer; margin-bottom: 16px; }
+    .advanced-toggle:hover { color: var(--text-secondary); }
+    .advanced-content { display: none; margin-bottom: 20px; }
+    .advanced-content.show { display: block; }
+    
+    /* Submit Button */
+    .submit-btn {
       width: 100%;
       padding: 16px;
-      background: var(--accent);
+      background: linear-gradient(135deg, var(--accent), #15803d);
       color: #000;
       border: none;
       border-radius: 12px;
@@ -1023,540 +952,321 @@ app.get('/', (req, res) => {
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s;
-    }
-    .form-submit:hover { background: var(--accent-hover); }
-    .form-submit:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
-    
-    /* Image Uploader */
-    .image-uploader {
-      border: 2px dashed var(--border);
-      border-radius: 12px;
-      padding: 32px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: var(--bg-primary);
-    }
-    .image-uploader:hover, .image-uploader.dragover {
-      border-color: var(--accent);
-      background: rgba(34, 197, 94, 0.05);
-    }
-    .image-uploader.has-image {
-      padding: 12px;
-      border-style: solid;
-    }
-    .image-uploader-icon { font-size: 2.5rem; margin-bottom: 12px; }
-    .image-uploader-text { color: var(--text-secondary); font-size: 0.95rem; }
-    .image-uploader-text span { color: var(--accent); }
-    .image-uploader-hint { color: var(--text-muted); font-size: 0.8rem; margin-top: 8px; }
-    .image-uploader input[type="file"] { display: none; }
-    .image-preview {
-      max-width: 200px;
-      max-height: 200px;
-      border-radius: 12px;
-      object-fit: cover;
-      margin: 0 auto;
-      display: block;
-    }
-    .image-preview-container { position: relative; display: inline-block; }
-    .image-remove {
-      position: absolute;
-      top: -8px;
-      right: -8px;
-      width: 24px;
-      height: 24px;
-      background: var(--pink);
-      color: #fff;
-      border: none;
-      border-radius: 50%;
-      cursor: pointer;
-      font-size: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 8px;
     }
-    .image-url-toggle {
-      margin-top: 12px;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-    .image-url-toggle a { color: var(--accent); cursor: pointer; }
-    .image-url-input { margin-top: 12px; display: none; }
-    .image-url-input.show { display: block; }
-    .form-result {
-      margin-top: 20px;
-      padding: 16px;
-      border-radius: 12px;
-      display: none;
-    }
-    .form-result.show { display: block; }
-    .form-result.success { background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent); }
-    .form-result.error { background: rgba(244, 63, 94, 0.1); border: 1px solid var(--pink); }
-    .form-result pre { font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; }
+    .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -10px var(--accent-glow); }
+    .submit-btn:hover .rocket { animation: bounce 0.5s ease infinite; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     
-    /* Agent Discovery - Subtle footer style */
-    .agent-section {
-      border-top: 1px solid var(--border);
-      padding: 32px 0;
-      text-align: center;
-      background: var(--bg-secondary);
-    }
-    .agent-section p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
-    .agent-section p span { color: var(--accent); }
-    .agent-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-    .agent-link {
-      padding: 8px 14px;
-      background: var(--bg-primary);
+    /* Preview Card */
+    .preview-card {
+      background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      font-family: monospace;
-      transition: all 0.2s;
+      border-radius: 16px;
+      padding: 24px;
+      position: sticky;
+      top: 100px;
     }
-    .agent-link:hover { border-color: var(--accent); color: var(--accent); }
+    .preview-title { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px; }
+    .preview-token {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .preview-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .preview-image { width: 56px; height: 56px; border-radius: 12px; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; overflow: hidden; }
+    .preview-image img { width: 100%; height: 100%; object-fit: cover; }
+    .preview-name { font-weight: 600; font-size: 1.1rem; }
+    .preview-symbol { color: var(--text-muted); font-size: 0.9rem; }
+    .preview-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; margin-top: 8px; }
+    .preview-badge.degen { background: rgba(244,63,94,0.15); color: #fb7185; }
+    .preview-badge.creator { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .preview-badge.community { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .preview-badge.lowfee { background: rgba(234,179,8,0.15); color: #fde047; }
+    .preview-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .preview-stat-label { font-size: 0.75rem; color: var(--text-muted); }
+    .preview-stat-value { font-weight: 600; font-size: 0.9rem; color: var(--text-secondary); }
     
-    /* Stats Bar */
-    .stats-bar {
-      padding: 24px 0;
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border);
-    }
-    .stats-grid { display: flex; justify-content: center; gap: 48px; flex-wrap: wrap; }
-    .stat-item { text-align: center; }
-    .stat-value { font-size: 2rem; font-weight: 700; color: var(--text-primary); }
-    .stat-label { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+    /* Result */
+    .result { margin-top: 20px; padding: 16px; border-radius: 12px; display: none; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+    .result.show { display: block; }
+    .result.success { background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent); }
+    .result.error { background: rgba(244, 63, 94, 0.1); border: 1px solid var(--pink); }
+    .result pre { white-space: pre-wrap; word-break: break-all; }
     
     /* Footer */
-    .footer {
-      padding: 48px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
-    }
-    .footer-links { display: flex; gap: 32px; justify-content: center; margin-bottom: 24px; }
-    .footer-links a { color: var(--text-secondary); font-size: 0.95rem; }
-    .footer-links a:hover { color: var(--text-primary); }
-    .footer-tagline { color: var(--text-muted); font-size: 0.9rem; }
-    .footer-tagline span { color: var(--accent); }
-    
-    /* Responsive */
-    @media (max-width: 1024px) {
-      .steps { grid-template-columns: repeat(2, 1fr); }
-      .templates { grid-template-columns: repeat(2, 1fr); }
-      .features { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 768px) {
-      .nav { display: none; }
-      .hero { padding: 60px 0 40px; }
-      .hero h1 { font-size: 2rem; }
-      .steps { grid-template-columns: 1fr 1fr; gap: 16px; }
-      .templates { grid-template-columns: 1fr; }
-      .features { grid-template-columns: 1fr; }
-      .section { padding: 60px 0; }
-    }
+    .footer { text-align: center; padding: 32px; color: var(--text-muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 48px; }
+    .footer a { color: var(--text-secondary); margin: 0 12px; }
   </style>
 </head>
 <body>
-  <!-- Header -->
   <header class="header">
-    <div class="container header-inner">
-      <a href="/" class="logo">
-        🚀 <span>Earn</span>
-      </a>
-      <nav class="nav">
-        <a href="#launch">Launch</a>
-        <a href="/explore">Explore</a>
-        <a href="/docs">API Docs</a>
-        <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
-      </nav>
-    </div>
+    <div class="logo">🚀 <span>Earn</span></div>
+    <nav class="nav">
+      <a href="/">Launch</a>
+      <a href="/explore">Explore</a>
+      <a href="/stats">Stats</a>
+      <a href="/docs">API Docs</a>
+    </nav>
   </header>
 
-  <!-- Stats Bar -->
-  <section class="stats-bar" id="statsBar">
-    <div class="container">
-      <div class="stats-grid" id="statsGrid">
-        <div class="stat-item"><div class="stat-value" id="statTokens">-</div><div class="stat-label">Tokens</div></div>
-        <div class="stat-item"><div class="stat-value" id="statVolume">-</div><div class="stat-label">24h Volume</div></div>
-        <div class="stat-item"><div class="stat-value" id="statFees">-</div><div class="stat-label">Fees Distributed</div></div>
+  <main class="main">
+    <!-- AI Agent Banner -->
+    <div class="ai-banner">
+      <div class="ai-banner-title">🤖 AI Agents — Launch tokens programmatically</div>
+      <div class="ai-banner-code">curl -X POST https://api.earn.supply/launch -H "Content-Type: application/json" -d '{"name":"...","ticker":"...","image":"...","tokenomics":"degen"}'</div>
+      <div class="ai-banner-links">
+        <a href="/docs">📖 Docs</a>
+        <a href="/openapi.json">📋 OpenAPI</a>
+        <a href="/.well-known/ai-plugin.json">🔌 Plugin</a>
+        <a href="/llm.txt">🤖 LLM.txt</a>
       </div>
     </div>
-  </section>
 
-  <!-- Launch Form -->
-  <section id="launch" class="section launch-section">
-    <div class="container">
-      <div class="section-header">
-        <h2>Launch Your Token</h2>
-        <p>Fill in the details and we'll create your token on Pump.fun</p>
-      </div>
-      <div class="launch-inner">
+    <div class="section-title">Or launch manually:</div>
+
+    <div class="launch-grid">
+      <!-- Form -->
+      <div class="form-card">
         <form id="launchForm">
-          <div class="form-group">
-            <label>Token Name</label>
-            <input type="text" class="form-input" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
+          <!-- Name + Ticker Row -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Token Name</label>
+              <input type="text" class="form-input" id="name" placeholder="My Awesome Token" required maxlength="32">
+            </div>
+            <div class="form-group small">
+              <label>Ticker</label>
+              <input type="text" class="form-input" id="ticker" placeholder="MAT" required maxlength="10" style="text-transform:uppercase">
+            </div>
           </div>
-          <div class="form-group">
-            <label>Ticker</label>
-            <input type="text" class="form-input" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform:uppercase;">
-          </div>
-          <div class="form-group">
-            <label>Token Image</label>
-            <div class="image-uploader" id="imageUploader">
-              <div class="image-uploader-icon">🖼️</div>
-              <div class="image-uploader-text">Drag & drop an image or <span>browse</span></div>
-              <div class="image-uploader-hint">PNG, JPG or GIF, max 5MB</div>
+
+          <!-- Image Upload -->
+          <div class="image-upload-container">
+            <div class="image-upload" id="imageUpload">
+              <div class="image-upload-icon">🖼️</div>
+              <div class="image-upload-text">Upload</div>
               <input type="file" id="imageFile" accept="image/*">
             </div>
-            <div class="image-url-toggle">Or <a id="toggleUrlInput">paste an image URL</a></div>
-            <div class="image-url-input" id="imageUrlContainer">
-              <input type="url" class="form-input" id="imageUrl" placeholder="https://example.com/logo.png">
+            <div class="image-upload-info">
+              <p>Token Image</p>
+              <small>PNG, JPG or GIF. Max 5MB.</small>
+              <br><span class="image-url-link" id="toggleUrl">Or paste URL</span>
+              <div class="image-url-input" id="urlInputContainer">
+                <input type="url" class="form-input" id="imageUrl" placeholder="https://...">
+              </div>
             </div>
-            <input type="hidden" id="image">
           </div>
-          <div class="form-group">
+          <input type="hidden" id="image">
+
+          <!-- Description -->
+          <div class="form-group" style="margin-bottom:20px">
             <label>Description <span>(optional)</span></label>
             <textarea class="form-input" id="description" placeholder="What makes your token special?"></textarea>
           </div>
-          <div class="form-group">
-            <label>Website <span>(optional)</span></label>
-            <input type="url" class="form-input" id="website" placeholder="https://mytoken.com">
+
+          <!-- Website + Twitter Row -->
+          <div class="form-row">
+            <div class="form-group">
+              <label>Website <span>(optional)</span></label>
+              <input type="url" class="form-input" id="website" placeholder="https://mytoken.com">
+            </div>
+            <div class="form-group">
+              <label>X / Twitter <span>(optional)</span></label>
+              <input type="url" class="form-input" id="twitter" placeholder="https://x.com/mytoken">
+            </div>
           </div>
-          <div class="form-group">
-            <label>X (Twitter) <span>(optional)</span></label>
-            <input type="url" class="form-input" id="twitter" placeholder="https://x.com/mytoken">
+
+          <!-- Tokenomics Cards -->
+          <div class="tokenomics-label">Tokenomics Template</div>
+          <div class="tokenomics-grid">
+            <div class="tokenomics-card selected" data-value="degen">
+              <div class="tokenomics-card-icon">🎰</div>
+              <div class="tokenomics-card-name">Degen</div>
+              <div class="tokenomics-card-split">40/30/30</div>
+            </div>
+            <div class="tokenomics-card" data-value="creator">
+              <div class="tokenomics-card-icon">🎨</div>
+              <div class="tokenomics-card-name">Creator</div>
+              <div class="tokenomics-card-split">50/25/25</div>
+            </div>
+            <div class="tokenomics-card" data-value="community">
+              <div class="tokenomics-card-icon">🏛️</div>
+              <div class="tokenomics-card-name">Community</div>
+              <div class="tokenomics-card-split">25/25/50</div>
+            </div>
+            <div class="tokenomics-card" data-value="lowfee">
+              <div class="tokenomics-card-icon">💰</div>
+              <div class="tokenomics-card-name">Low Fee</div>
+              <div class="tokenomics-card-split">40/30/30</div>
+            </div>
           </div>
-          <div class="form-group">
-            <label>Tokenomics Template</label>
-            <select class="form-input" id="tokenomics" required>
-              <option value="degen">🎰 Degen — 40% Creator / 30% Earn / 30% Stakers</option>
-              <option value="creator">🎨 Creator — 50% Creator / 25% Earn / 25% Stakers</option>
-              <option value="community">🏛️ Community — 25% Creator / 25% Earn / 50% Stakers</option>
-              <option value="lowfee">💰 Low Fee — 40% Creator / 30% Earn / 30% Stakers</option>
-            </select>
+          <input type="hidden" id="tokenomics" value="degen">
+
+          <!-- Advanced -->
+          <div class="advanced-toggle" id="advancedToggle">Advanced ▼</div>
+          <div class="advanced-content" id="advancedContent">
+            <div class="form-group">
+              <label>Your Wallet <span>(defaults to Earn wallet)</span></label>
+              <input type="text" class="form-input" id="agentWallet" placeholder="Your Solana wallet address">
+            </div>
           </div>
-          <div class="form-group">
-            <label>Your Wallet <span>(optional — defaults to Earn wallet)</span></label>
-            <input type="text" class="form-input" id="agentWallet" placeholder="Your Solana wallet address">
-          </div>
-          <button type="submit" class="form-submit" id="submitBtn">🚀 Launch Token</button>
+
+          <button type="submit" class="submit-btn" id="submitBtn">
+            <span class="rocket">🚀</span> Launch Token
+          </button>
         </form>
-        <div id="result" class="form-result">
+
+        <div id="result" class="result">
           <pre id="resultContent"></pre>
         </div>
-        
-              </div>
-    </div>
-  </section>
+      </div>
 
-  <!-- How It Works -->
-  <section class="section">
-    <div class="container">
-      <div class="section-header">
-        <h2>How It Works</h2>
-        <p>Four steps to sustainable tokenomics. No smart contract deployment needed.</p>
-      </div>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <h3>Configure</h3>
-          <p>Choose your tokenomics template and fee structure</p>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <h3>Launch</h3>
-          <p>One API call creates your token on Pump.fun</p>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <h3>Trade</h3>
-          <p>Users trade on Pump.fun, fees flow to Earn</p>
-        </div>
-        <div class="step">
-          <div class="step-num">4</div>
-          <h3>Earn</h3>
-          <p>Fees split to you, stakers, and buybacks automatically</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Templates -->
-  <section class="section" style="background: var(--bg-secondary);">
-    <div class="container">
-      <div class="section-header">
-        <h2>Choose Your Template</h2>
-        <p>Pre-configured fee structures for every project type</p>
-      </div>
-      <div class="templates">
-        <div class="template-card">
-          <h3>🎰 Degen</h3>
-          <p class="desc">Maximum extraction, maximum rewards</p>
-          <div class="fee">2%<span> fee</span></div>
-          <div class="template-splits">
-            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">40%</span></div>
-            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">30%</span></div>
-            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">30%</span></div>
+      <!-- Preview Card -->
+      <div class="preview-card">
+        <div class="preview-title">Live Preview</div>
+        <div class="preview-token">
+          <div class="preview-header">
+            <div class="preview-image" id="previewImage">🪙</div>
+            <div>
+              <div class="preview-name" id="previewName">Token Name</div>
+              <div class="preview-symbol" id="previewSymbol">$TICKER</div>
+              <div class="preview-badge degen" id="previewBadge">degen</div>
+            </div>
           </div>
-          <span class="template-badge degen">Degen</span>
-        </div>
-        <div class="template-card">
-          <h3>🎨 Creator</h3>
-          <p class="desc">Balanced for builders</p>
-          <div class="fee">1.5%<span> fee</span></div>
-          <div class="template-splits">
-            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">50%</span></div>
-            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">25%</span></div>
-            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">25%</span></div>
+          <div class="preview-stats">
+            <div><div class="preview-stat-label">Price</div><div class="preview-stat-value">—</div></div>
+            <div><div class="preview-stat-label">24h Volume</div><div class="preview-stat-value">—</div></div>
+            <div><div class="preview-stat-label">Market Cap</div><div class="preview-stat-value">—</div></div>
+            <div><div class="preview-stat-label">Staker APY</div><div class="preview-stat-value">—</div></div>
           </div>
-          <span class="template-badge creator">Creator</span>
-        </div>
-        <div class="template-card">
-          <h3>🏛️ Community</h3>
-          <p class="desc">Fair launch energy</p>
-          <div class="fee">1%<span> fee</span></div>
-          <div class="template-splits">
-            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">25%</span></div>
-            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">25%</span></div>
-            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">50%</span></div>
-          </div>
-          <span class="template-badge community">Community</span>
-        </div>
-        <div class="template-card">
-          <h3>💰 Low Fee</h3>
-          <p class="desc">For the fee-sensitive</p>
-          <div class="fee">0.5%<span> fee</span></div>
-          <div class="template-splits">
-            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">40%</span></div>
-            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">30%</span></div>
-            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">30%</span></div>
-          </div>
-          <span class="template-badge lowfee">Low Fee</span>
         </div>
       </div>
     </div>
-  </section>
+  </main>
 
-  <!-- Features -->
-  <section class="section">
-    <div class="container">
-      <div class="section-header">
-        <h2>Everything Your Token Needs</h2>
-        <p>Stop building tokenomics from scratch. We handle the infrastructure.</p>
-      </div>
-      <div class="features">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>One API Call</h3>
-          <p>Register your token in seconds. No smart contracts to deploy.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔄</div>
-          <h3>Automatic Buybacks</h3>
-          <p>Price floor protection built-in. Tokens get bought back every trade.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">💎</div>
-          <h3>Staking Rewards</h3>
-          <p>Holders earn yield just by staking. Powered by trading fees.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">💰</div>
-          <h3>Creator Revenue</h3>
-          <p>Get paid on every trade. Real, sustainable income from your token.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔌</div>
-          <h3>Full API Access</h3>
-          <p>Build custom integrations. Webhooks, stats, everything exposed.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🌐</div>
-          <h3>Works Everywhere</h3>
-          <p>Pump.fun, Raydium, Jupiter — we integrate with all Solana DEXs.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-
-  <!-- Agent Discovery -->
-  <section class="agent-section">
-    <div class="container">
-      <p>🤖 <span>AI Agents</span>: Integrate via <a href="/openapi.json">openapi.json</a> • <a href="/llm.txt">llm.txt</a> • <a href="/.well-known/ai-plugin.json">ai-plugin.json</a></p>
-    </div>
-  </section>
-
-  <!-- Footer -->
   <footer class="footer">
-    <div class="container">
-      <div class="footer-links">
-        <a href="/docs">API Docs</a>
-        <a href="/explore">Explore</a>
-        <a href="/stats">Stats</a>
-        <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
-        <a href="https://earn.supply" target="_blank">Dashboard</a>
-      </div>
-      <p class="footer-tagline">Built for <span>Solana</span> • Powered by Pump.fun</p>
-    </div>
+    <a href="/docs">API Docs</a>
+    <a href="/explore">Explore</a>
+    <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
+    <a href="https://earn.supply">Dashboard</a>
   </footer>
 
   <script>
-    // Load stats
-    async function loadStats() {
-      try {
-        const res = await fetch('/stats');
-        const data = await res.json();
-        const statsBar = document.getElementById('statsBar');
-        
-        if (data.success && (data.totalLaunches > 0 || data.totalVolume24h > 0)) {
-          document.getElementById('statTokens').textContent = data.totalLaunches || 0;
-          document.getElementById('statVolume').textContent = data.totalVolume24h ? '$' + formatNum(data.totalVolume24h) : '$0';
-          document.getElementById('statFees').textContent = data.totalFees ? '$' + formatNum(data.totalFees) : '$0';
-          statsBar.style.display = 'block';
-        } else {
-          statsBar.style.display = 'none';
-        }
-      } catch (e) {
-        document.getElementById('statsBar').style.display = 'none';
-      }
-    }
+    // Tokenomics selection
+    const tokenomicsCards = document.querySelectorAll('.tokenomics-card');
+    const tokenomicsInput = document.getElementById('tokenomics');
+    const previewBadge = document.getElementById('previewBadge');
     
-    function formatNum(n) {
-      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-      return n.toFixed(0);
-    }
-    
-    loadStats();
-    
-    // Image Uploader
-    const imageUploader = document.getElementById('imageUploader');
+    tokenomicsCards.forEach(card => {
+      card.addEventListener('click', () => {
+        tokenomicsCards.forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        const value = card.dataset.value;
+        tokenomicsInput.value = value;
+        previewBadge.textContent = value;
+        previewBadge.className = 'preview-badge ' + value;
+      });
+    });
+
+    // Advanced toggle
+    document.getElementById('advancedToggle').addEventListener('click', function() {
+      const content = document.getElementById('advancedContent');
+      content.classList.toggle('show');
+      this.textContent = content.classList.contains('show') ? 'Advanced ▲' : 'Advanced ▼';
+    });
+
+    // Image upload
+    const imageUpload = document.getElementById('imageUpload');
     const imageFile = document.getElementById('imageFile');
     const imageInput = document.getElementById('image');
-    const imageUrlInput = document.getElementById('imageUrl');
-    const imageUrlContainer = document.getElementById('imageUrlContainer');
-    const toggleUrlInput = document.getElementById('toggleUrlInput');
-    let uploadedImageData = null;
+    const previewImage = document.getElementById('previewImage');
     
-    imageUploader.addEventListener('click', () => imageFile.click());
-    
-    imageUploader.addEventListener('dragover', (e) => {
+    imageUpload.addEventListener('click', () => imageFile.click());
+    imageUpload.addEventListener('dragover', e => { e.preventDefault(); imageUpload.style.borderColor = 'var(--accent)'; });
+    imageUpload.addEventListener('dragleave', () => { imageUpload.style.borderColor = ''; });
+    imageUpload.addEventListener('drop', e => {
       e.preventDefault();
-      imageUploader.classList.add('dragover');
+      imageUpload.style.borderColor = '';
+      if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
     });
+    imageFile.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
     
-    imageUploader.addEventListener('dragleave', () => {
-      imageUploader.classList.remove('dragover');
-    });
-    
-    imageUploader.addEventListener('drop', (e) => {
-      e.preventDefault();
-      imageUploader.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) {
-        handleImageFile(file);
-      }
-    });
-    
-    imageFile.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) handleImageFile(file);
-    });
-    
-    function handleImageFile(file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image must be less than 5MB');
-        return;
-      }
-      
+    function handleFile(file) {
+      if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
       const reader = new FileReader();
-      reader.onload = (e) => {
-        uploadedImageData = e.target.result;
-        imageInput.value = uploadedImageData;
-        showImagePreview(uploadedImageData);
+      reader.onload = e => {
+        imageInput.value = e.target.result;
+        imageUpload.innerHTML = '<img src="' + e.target.result + '" class="image-preview">';
+        imageUpload.classList.add('has-image');
+        previewImage.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px">';
       };
       reader.readAsDataURL(file);
     }
-    
-    function showImagePreview(src) {
-      imageUploader.classList.add('has-image');
-      imageUploader.innerHTML = '<div class="image-preview-container">' +
-        '<img src="' + src + '" class="image-preview">' +
-        '<button type="button" class="image-remove" onclick="removeImage(event)">×</button>' +
-        '</div>';
-    }
-    
-    window.removeImage = function(e) {
-      e.stopPropagation();
-      uploadedImageData = null;
-      imageInput.value = '';
-      imageUploader.classList.remove('has-image');
-      imageUploader.innerHTML = '<div class="image-uploader-icon">🖼️</div>' +
-        '<div class="image-uploader-text">Drag & drop an image or <span>browse</span></div>' +
-        '<div class="image-uploader-hint">PNG, JPG or GIF, max 5MB</div>' +
-        '<input type="file" id="imageFile" accept="image/*">';
-      document.getElementById('imageFile').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) handleImageFile(file);
-      });
-    };
-    
-    toggleUrlInput.addEventListener('click', () => {
-      imageUrlContainer.classList.toggle('show');
-      toggleUrlInput.textContent = imageUrlContainer.classList.contains('show') ? 'hide URL input' : 'paste an image URL';
+
+    // URL toggle
+    document.getElementById('toggleUrl').addEventListener('click', function() {
+      const container = document.getElementById('urlInputContainer');
+      container.classList.toggle('show');
+      this.textContent = container.classList.contains('show') ? 'Hide URL' : 'Or paste URL';
     });
-    
-    imageUrlInput.addEventListener('input', (e) => {
+    document.getElementById('imageUrl').addEventListener('input', e => {
       imageInput.value = e.target.value;
+      if (e.target.value) {
+        previewImage.innerHTML = '<img src="' + e.target.value + '" style="width:100%;height:100%;object-fit:cover;border-radius:12px" onerror="this.parentElement.innerHTML=\\'🪙\\'">';
+      }
     });
-    
+
+    // Live preview
+    document.getElementById('name').addEventListener('input', e => {
+      document.getElementById('previewName').textContent = e.target.value || 'Token Name';
+    });
+    document.getElementById('ticker').addEventListener('input', e => {
+      document.getElementById('previewSymbol').textContent = '$' + (e.target.value.toUpperCase() || 'TICKER');
+    });
+
+    // Form submit
     const form = document.getElementById('launchForm');
     const result = document.getElementById('result');
     const resultContent = document.getElementById('resultContent');
     const submitBtn = document.getElementById('submitBtn');
-    
-    form.addEventListener('submit', async (e) => {
+
+    form.addEventListener('submit', async e => {
       e.preventDefault();
-      
-      const imageValue = document.getElementById('image').value;
-      if (!imageValue) {
-        alert('Please upload an image or enter an image URL');
-        return;
-      }
+      if (!imageInput.value) { alert('Please upload an image or enter URL'); return; }
       
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Launching...';
+      submitBtn.innerHTML = '<span class="rocket">🚀</span> Launching...';
       
       const data = {
         name: document.getElementById('name').value,
         ticker: document.getElementById('ticker').value.toUpperCase(),
-        image: imageValue,
-        tokenomics: document.getElementById('tokenomics').value,
+        image: imageInput.value,
+        tokenomics: tokenomicsInput.value,
         description: document.getElementById('description').value || undefined,
         website: document.getElementById('website').value || undefined,
         twitter: document.getElementById('twitter').value || undefined,
       };
       const wallet = document.getElementById('agentWallet').value;
       if (wallet) data.agentWallet = wallet;
-      
+
       try {
-        const res = await fetch('/launch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
+        const res = await fetch('/launch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
         const json = await res.json();
-        
-        result.className = 'form-result show ' + (json.success ? 'success' : 'error');
+        result.className = 'result show ' + (json.success ? 'success' : 'error');
         resultContent.textContent = JSON.stringify(json, null, 2);
       } catch (err) {
-        result.className = 'form-result show error';
+        result.className = 'result show error';
         resultContent.textContent = 'Error: ' + err.message;
       }
       
       submitBtn.disabled = false;
-      submitBtn.textContent = '🚀 Launch Token';
+      submitBtn.innerHTML = '<span class="rocket">🚀</span> Launch Token';
     });
   </script>
 </body>
