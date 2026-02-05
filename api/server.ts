@@ -800,400 +800,508 @@ app.get('/skill.md', (req, res) => {
   res.type('text/markdown').send(SKILL_MD);
 });
 
-// Interactive landing page with live data
+// Premium landing page matching earn.supply design
 app.get('/', (req, res) => {
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Earn Protocol - Launch & Earn from Tokens</title>
-  <link rel="icon" href="/logo.jpg" type="image/jpeg">
+  <title>Earn Protocol | Launch Tokens, Earn Forever</title>
+  <meta name="description" content="Launch tokens on Pump.fun with automatic fee sharing, buybacks, and staking rewards. One API call.">
+  <link rel="icon" href="/logo.jpg">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; }
-    a { color: #00FF88; text-decoration: none; }
-    a:hover { text-decoration: underline; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #111111;
+      --bg-card: #0f0f0f;
+      --border: #1f1f1f;
+      --border-hover: #2a2a2a;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent: #22c55e;
+      --accent-hover: #16a34a;
+      --accent-glow: rgba(34, 197, 94, 0.15);
+      --pink: #f43f5e;
+      --blue: #3b82f6;
+      --gold: #eab308;
+      --purple: #a855f7;
+    }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    a { color: var(--accent); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: var(--accent-hover); }
+    
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
     
     /* Header */
-    .header { padding: 1.5rem 2rem; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; justify-content: space-between; }
-    .logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.5rem; font-weight: 700; }
-    .logo img { width: 40px; height: 40px; border-radius: 8px; }
-    .logo span { color: #00FF88; }
-    .nav { display: flex; gap: 2rem; }
-    .nav a { color: #888; font-weight: 500; }
-    .nav a:hover, .nav a.active { color: #fff; text-decoration: none; }
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 16px 0;
+      background: rgba(10, 10, 10, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .header-inner { display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; }
+    .logo img { width: 36px; height: 36px; border-radius: 8px; }
+    .logo span { color: var(--accent); }
+    .nav { display: flex; align-items: center; gap: 32px; }
+    .nav a { color: var(--text-secondary); font-weight: 500; font-size: 0.95rem; }
+    .nav a:hover { color: var(--text-primary); }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; transition: all 0.2s; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); color: #000; }
+    .btn-secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
     
     /* Hero */
-    .hero { text-align: center; padding: 4rem 2rem 3rem; }
-    .hero h1 { font-size: 3rem; margin-bottom: 1rem; }
-    .hero h1 span { color: #00FF88; }
-    .hero p { color: #888; font-size: 1.25rem; max-width: 600px; margin: 0 auto; }
+    .hero {
+      padding: 100px 0 80px;
+      text-align: center;
+      background: radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-glow), transparent);
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero h1 em { font-style: normal; color: var(--accent); -webkit-text-fill-color: var(--accent); }
+    .hero p { font-size: 1.25rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto 40px; }
+    .hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .hero .btn-primary { padding: 14px 32px; font-size: 1.1rem; }
+    .hero .btn-secondary { padding: 14px 32px; font-size: 1.1rem; }
     
-    /* Stats Bar */
-    .stats-bar { display: flex; justify-content: center; gap: 3rem; padding: 2rem; background: #111; border-top: 1px solid #1a1a1a; border-bottom: 1px solid #1a1a1a; }
-    .stat { text-align: center; }
-    .stat-value { font-size: 2rem; font-weight: 700; color: #00FF88; }
-    .stat-label { color: #666; font-size: 0.85rem; margin-top: 0.25rem; }
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+    .card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
     
-    /* Main Content */
-    .main { max-width: 1200px; margin: 0 auto; padding: 3rem 2rem; }
-    .section-title { font-size: 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }
-    
-    /* Tabs */
-    .tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #222; }
-    .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: #888; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .tab:hover { color: #fff; }
-    .tab.active { color: #00FF88; border-bottom-color: #00FF88; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    
-    /* Token Grid */
-    .token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
-    .token-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 1.5rem; transition: border-color 0.2s; }
-    .token-card:hover { border-color: #333; }
-    .token-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-    .token-img { width: 48px; height: 48px; border-radius: 8px; background: #222; object-fit: cover; }
-    .token-name { font-weight: 600; font-size: 1.1rem; }
-    .token-symbol { color: #888; font-size: 0.9rem; }
-    .token-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #222; }
-    .token-stat-label { color: #666; font-size: 0.75rem; }
-    .token-stat-value { font-weight: 500; }
-    .token-stat-value.positive { color: #22c55e; }
-    .token-stat-value.negative { color: #00FF88; }
-    .token-badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-    .token-badge.degen { background: #7c3aed20; color: #a78bfa; }
-    .token-badge.creator { background: #f59e0b20; color: #fbbf24; }
-    .token-badge.community { background: #3b82f620; color: #60a5fa; }
-    
-    /* Launch Form */
-    .launch-section { max-width: 500px; margin: 0 auto; }
-    .form-group { margin-bottom: 1.5rem; }
-    label { display: block; margin-bottom: 0.5rem; color: #ccc; font-size: 0.9rem; }
-    input, select, textarea { width: 100%; padding: 0.875rem; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #fff; font-size: 1rem; }
-    input:focus, select:focus, textarea:focus { outline: none; border-color: #00FF88; }
-    .optional { color: #666; font-size: 0.8rem; }
-    button { width: 100%; padding: 1rem; background: #00FF88; color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: 600; cursor: pointer; }
-    button:hover { background: #00cc6a; }
-    button:disabled { background: #666; cursor: not-allowed; }
-    .result { margin-top: 1.5rem; padding: 1rem; background: #1a1a1a; border-radius: 8px; display: none; }
-    .result.show { display: block; }
-    .result.success { border: 1px solid #22c55e; }
-    .result.error { border: 1px solid #00FF88; }
-    pre { overflow-x: auto; font-size: 0.85rem; white-space: pre-wrap; }
-    
-    /* Loading */
-    .loading { text-align: center; padding: 3rem; color: #666; }
-    .spinner { display: inline-block; width: 24px; height: 24px; border: 2px solid #333; border-top-color: #00FF88; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    /* Empty State */
-    .empty-state { text-align: center; padding: 4rem 2rem; color: #666; }
-    .empty-state h3 { color: #888; margin-bottom: 0.5rem; }
-    
-    /* Footer */
-    .footer { text-align: center; padding: 3rem 2rem; border-top: 1px solid #1a1a1a; color: #666; font-size: 0.9rem; }
-    .footer-links { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1rem; }
+    /* Section */
+    .section { padding: 80px 0; }
+    .section-header { text-align: center; margin-bottom: 48px; }
+    .section-header h2 { font-size: 2rem; font-weight: 700; margin-bottom: 12px; }
+    .section-header p { color: var(--text-secondary); font-size: 1.1rem; }
     
     /* How It Works */
-    .how-it-works { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin: 2rem 0; }
-    .step { text-align: center; padding: 1.5rem; background: #111; border-radius: 12px; border: 1px solid #222; }
-    .step-num { width: 32px; height: 32px; background: #00FF88; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 0.75rem; }
-    .step h4 { margin-bottom: 0.5rem; }
-    .step p { color: #888; font-size: 0.85rem; }
+    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+    .step { text-align: center; }
+    .step-num {
+      width: 48px; height: 48px;
+      background: var(--accent);
+      color: #000;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.25rem;
+      margin-bottom: 16px;
+    }
+    .step h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .step p { color: var(--text-muted); font-size: 0.9rem; }
     
-    /* Hero CTA Buttons */
-    .hero-cta { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap; }
-    .btn-primary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; background: #00FF88; color: #000; font-weight: 700; font-size: 1.1rem; border-radius: 12px; text-decoration: none; transition: all 0.2s; }
-    .btn-primary:hover { background: #00cc6a; transform: translateY(-2px); text-decoration: none; }
-    .btn-secondary { display: inline-flex; align-items: center; gap: 0.5rem; padding: 1rem 2rem; background: transparent; color: #fff; font-weight: 600; font-size: 1rem; border: 1px solid #333; border-radius: 12px; text-decoration: none; transition: all 0.2s; }
-    .btn-secondary:hover { border-color: #00FF88; color: #00FF88; text-decoration: none; }
+    /* Templates */
+    .templates { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .template-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .template-card:hover { border-color: var(--accent); }
+    .template-card h3 { font-size: 1.25rem; margin-bottom: 8px; }
+    .template-card .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px; }
+    .template-card .fee { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: 16px; }
+    .template-card .fee span { font-size: 1rem; color: var(--text-muted); font-weight: 400; }
+    .template-splits { display: flex; flex-direction: column; gap: 8px; }
+    .template-split { display: flex; justify-content: space-between; font-size: 0.85rem; }
+    .template-split-label { color: var(--text-muted); }
+    .template-split-value { font-weight: 600; }
+    .template-badge { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; margin-top: 16px; }
+    .template-badge.degen { background: var(--pink); color: #fff; }
+    .template-badge.creator { background: var(--accent); color: #000; }
+    .template-badge.community { background: var(--blue); color: #fff; }
+    .template-badge.lowfee { background: var(--gold); color: #000; }
     
-    /* Nav Primary Button */
-    .nav-primary { background: #00FF88 !important; color: #000 !important; padding: 0.5rem 1rem !important; border-radius: 8px; font-weight: 600 !important; }
-    .nav-primary:hover { background: #00cc6a !important; }
+    /* Features */
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      transition: all 0.3s;
+    }
+    .feature-card:hover { border-color: var(--border-hover); }
+    .feature-icon {
+      width: 48px; height: 48px;
+      background: var(--accent-glow);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 1.5rem;
+    }
+    .feature-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .feature-card p { color: var(--text-muted); font-size: 0.9rem; line-height: 1.5; }
     
+    /* Launch Form */
+    .launch-section { background: var(--bg-secondary); border-top: 1px solid var(--border); }
+    .launch-inner { max-width: 500px; margin: 0 auto; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 0.95rem; }
+    .form-group label span { color: var(--text-muted); font-weight: 400; }
+    .form-input {
+      width: 100%;
+      padding: 14px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      transition: all 0.2s;
+    }
+    .form-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .form-input::placeholder { color: var(--text-muted); }
+    select.form-input { cursor: pointer; }
+    textarea.form-input { resize: vertical; min-height: 80px; }
+    .form-submit {
+      width: 100%;
+      padding: 16px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .form-submit:hover { background: var(--accent-hover); }
+    .form-submit:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+    .form-result {
+      margin-top: 20px;
+      padding: 16px;
+      border-radius: 12px;
+      display: none;
+    }
+    .form-result.show { display: block; }
+    .form-result.success { background: rgba(34, 197, 94, 0.1); border: 1px solid var(--accent); }
+    .form-result.error { background: rgba(244, 63, 94, 0.1); border: 1px solid var(--pink); }
+    .form-result pre { font-size: 0.85rem; white-space: pre-wrap; word-break: break-all; }
+    
+    /* Agent Discovery Banner */
+    .agent-banner {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(59, 130, 246, 0.1));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      margin-top: 40px;
+    }
+    .agent-banner h3 { font-size: 1.25rem; margin-bottom: 12px; }
+    .agent-banner p { color: var(--text-secondary); margin-bottom: 20px; }
+    .agent-links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .agent-link {
+      padding: 10px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+    .agent-link:hover { border-color: var(--accent); color: var(--accent); }
+    .agent-link code { color: var(--accent); }
+    
+    /* Footer */
+    .footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+    .footer-links { display: flex; gap: 32px; justify-content: center; margin-bottom: 24px; }
+    .footer-links a { color: var(--text-secondary); font-size: 0.95rem; }
+    .footer-links a:hover { color: var(--text-primary); }
+    .footer-tagline { color: var(--text-muted); font-size: 0.9rem; }
+    .footer-tagline span { color: var(--accent); }
+    
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .steps { grid-template-columns: repeat(2, 1fr); }
+      .templates { grid-template-columns: repeat(2, 1fr); }
+      .features { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 768px) {
-      .how-it-works { grid-template-columns: 1fr 1fr; }
-      .stats-bar { flex-wrap: wrap; gap: 1.5rem; }
       .nav { display: none; }
+      .hero { padding: 60px 0 40px; }
+      .hero h1 { font-size: 2rem; }
+      .steps { grid-template-columns: 1fr 1fr; gap: 16px; }
+      .templates { grid-template-columns: 1fr; }
+      .features { grid-template-columns: 1fr; }
+      .section { padding: 60px 0; }
     }
   </style>
 </head>
 <body>
+  <!-- Header -->
   <header class="header">
-    <div class="logo">
-      <img src="/logo.jpg" alt="Earn">
-      <span>Earn</span> Protocol
+    <div class="container header-inner">
+      <a href="/" class="logo">
+        <img src="/logo.jpg" alt="Earn">
+        <span>Earn</span>Protocol
+      </a>
+      <nav class="nav">
+        <a href="#launch">Launch</a>
+        <a href="/explore">Explore</a>
+        <a href="/docs">API Docs</a>
+        <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
+        <a href="#launch" class="btn btn-primary">Launch Token</a>
+      </nav>
     </div>
-    <nav class="nav">
-      <a href="#launch" class="nav-primary">🚀 Launch Token</a>
-      <a href="#explore">Explore</a>
-      <a href="/docs">API Docs</a>
-      <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
-    </nav>
   </header>
-  
+
+  <!-- Hero -->
   <section class="hero">
-    <h1>Launch Tokens. <span>Earn</span> Forever.</h1>
-    <p>Create tokens on Pump.fun with automatic fee sharing. You earn from every trade, forever.</p>
-    <div class="hero-cta">
-      <a href="#launch" class="btn-primary" onclick="switchTab('launch')">🚀 Launch Token</a>
-      <a href="#explore" class="btn-secondary" onclick="switchTab('explore')">Explore Tokens →</a>
-    </div>
-  </section>
-  
-  <section class="stats-bar" id="statsBar">
-    <div class="stat">
-      <div class="stat-value" id="statTokens">-</div>
-      <div class="stat-label">Tokens Launched</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="statAgents">-</div>
-      <div class="stat-label">Creators</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="statVolume">-</div>
-      <div class="stat-label">24h Volume</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="statStaking">-</div>
-      <div class="stat-label">Total Staked</div>
-    </div>
-  </section>
-  
-  <main class="main">
-    <div class="tabs">
-      <div class="tab active" data-tab="launch">🚀 Launch Token</div>
-      <div class="tab" data-tab="explore">🔥 Explore Tokens</div>
-      <div class="tab" data-tab="how">❓ How It Works</div>
-    </div>
-    
-    <!-- Launch Tab (Primary) -->
-    <div class="tab-content active" id="launch">
-      <div class="launch-section">
-        <form id="launchForm">
-          <div class="form-group">
-            <label>Token Name *</label>
-            <input type="text" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
-          </div>
-          
-          <div class="form-group">
-            <label>Ticker *</label>
-            <input type="text" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform: uppercase;">
-          </div>
-          
-          <div class="form-group">
-            <label>Image URL *</label>
-            <input type="url" id="image" placeholder="https://example.com/logo.png" required>
-          </div>
-          
-          <div class="form-group">
-            <label>Description <span class="optional">(optional)</span></label>
-            <textarea id="description" rows="2" placeholder="A brief description of your token..."></textarea>
-          </div>
-          
-          <div class="form-group">
-            <label>Tokenomics *</label>
-            <select id="tokenomics" required>
-              <option value="degen">🎰 Degen - You 40% | Earn 30% | Stakers 30%</option>
-              <option value="creator">🎨 Creator - You 50% | Earn 25% | Stakers 25%</option>
-              <option value="community">🏛️ Community - You 25% | Earn 25% | Stakers 50%</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label>Your Wallet <span class="optional">(optional - defaults to Earn wallet)</span></label>
-            <input type="text" id="agentWallet" placeholder="Your Solana wallet address">
-          </div>
-          
-          <button type="submit" id="submitBtn">🚀 Launch Token</button>
-        </form>
-        
-        <div id="result" class="result">
-          <pre id="resultContent"></pre>
-        </div>
+    <div class="container">
+      <h1>Make Your Memecoin<br><em>Immortal</em></h1>
+      <p>One API call. Instant fees, buybacks, staking, and creator revenue. Built for Solana.</p>
+      <div class="hero-buttons">
+        <a href="#launch" class="btn btn-primary">🚀 Launch Token</a>
+        <a href="/explore" class="btn btn-secondary">Explore Tokens →</a>
       </div>
     </div>
-    
-    <!-- Explore Tab -->
-    <div class="tab-content" id="explore">
-      <div id="tokenList" class="token-grid">
-        <div class="loading"><span class="spinner"></span><p>Loading tokens...</p></div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>How It Works</h2>
+        <p>Four steps to sustainable tokenomics. No smart contract deployment needed.</p>
       </div>
-    </div>
-    
-    <!-- How It Works Tab -->
-    <div class="tab-content" id="how">
-      <div class="how-it-works">
+      <div class="steps">
         <div class="step">
           <div class="step-num">1</div>
-          <h4>Launch</h4>
-          <p>Submit your token details via API or form. We create it on Pump.fun.</p>
+          <h3>Configure</h3>
+          <p>Choose your tokenomics template and fee structure</p>
         </div>
         <div class="step">
           <div class="step-num">2</div>
-          <h4>Trade</h4>
-          <p>Users discover and trade your token on Pump.fun. Volume generates fees.</p>
+          <h3>Launch</h3>
+          <p>One API call creates your token on Pump.fun</p>
         </div>
         <div class="step">
           <div class="step-num">3</div>
-          <h4>Collect</h4>
-          <p>Earn Protocol collects creator fees automatically from Pump.fun.</p>
+          <h3>Trade</h3>
+          <p>Users trade on Pump.fun, fees flow to Earn</p>
         </div>
         <div class="step">
           <div class="step-num">4</div>
-          <h4>Earn</h4>
-          <p>Fees split between you, Earn, and token stakers. Everyone wins.</p>
+          <h3>Earn</h3>
+          <p>Fees split to you, stakers, and buybacks automatically</p>
         </div>
       </div>
-      
-      <div style="max-width: 600px; margin: 2rem auto; padding: 2rem; background: #111; border-radius: 12px;">
-        <h3 style="margin-bottom: 1rem;">Tokenomics Options</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr style="border-bottom: 1px solid #222;">
-            <th style="text-align: left; padding: 0.75rem 0; color: #888;">Plan</th>
-            <th style="text-align: center; padding: 0.75rem 0; color: #22c55e;">You</th>
-            <th style="text-align: center; padding: 0.75rem 0; color: #00FF88;">Earn</th>
-            <th style="text-align: center; padding: 0.75rem 0; color: #3b82f6;">Stakers</th>
-          </tr>
-          <tr style="border-bottom: 1px solid #222;">
-            <td style="padding: 0.75rem 0;">🎰 Degen</td>
-            <td style="text-align: center;">40%</td>
-            <td style="text-align: center;">30%</td>
-            <td style="text-align: center;">30%</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #222;">
-            <td style="padding: 0.75rem 0;">🎨 Creator</td>
-            <td style="text-align: center;">50%</td>
-            <td style="text-align: center;">25%</td>
-            <td style="text-align: center;">25%</td>
-          </tr>
-          <tr>
-            <td style="padding: 0.75rem 0;">🏛️ Community</td>
-            <td style="text-align: center;">25%</td>
-            <td style="text-align: center;">25%</td>
-            <td style="text-align: center;">50%</td>
-          </tr>
-        </table>
+    </div>
+  </section>
+
+  <!-- Templates -->
+  <section class="section" style="background: var(--bg-secondary);">
+    <div class="container">
+      <div class="section-header">
+        <h2>Choose Your Template</h2>
+        <p>Pre-configured fee structures for every project type</p>
+      </div>
+      <div class="templates">
+        <div class="template-card">
+          <h3>🎰 Degen</h3>
+          <p class="desc">Maximum extraction, maximum rewards</p>
+          <div class="fee">2%<span> fee</span></div>
+          <div class="template-splits">
+            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">40%</span></div>
+            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">30%</span></div>
+            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">30%</span></div>
+          </div>
+          <span class="template-badge degen">Degen</span>
+        </div>
+        <div class="template-card">
+          <h3>🎨 Creator</h3>
+          <p class="desc">Balanced for builders</p>
+          <div class="fee">1.5%<span> fee</span></div>
+          <div class="template-splits">
+            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">50%</span></div>
+            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">25%</span></div>
+            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">25%</span></div>
+          </div>
+          <span class="template-badge creator">Creator</span>
+        </div>
+        <div class="template-card">
+          <h3>🏛️ Community</h3>
+          <p class="desc">Fair launch energy</p>
+          <div class="fee">1%<span> fee</span></div>
+          <div class="template-splits">
+            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">25%</span></div>
+            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">25%</span></div>
+            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">50%</span></div>
+          </div>
+          <span class="template-badge community">Community</span>
+        </div>
+        <div class="template-card">
+          <h3>💰 Low Fee</h3>
+          <p class="desc">For the fee-sensitive</p>
+          <div class="fee">0.5%<span> fee</span></div>
+          <div class="template-splits">
+            <div class="template-split"><span class="template-split-label">Creator</span><span class="template-split-value">40%</span></div>
+            <div class="template-split"><span class="template-split-label">Earn</span><span class="template-split-value">30%</span></div>
+            <div class="template-split"><span class="template-split-label">Stakers</span><span class="template-split-value">30%</span></div>
+          </div>
+          <span class="template-badge lowfee">Low Fee</span>
+        </div>
       </div>
     </div>
-  </main>
-  
-  <footer class="footer">
-    <div class="footer-links">
-      <a href="/skill.md">API Docs</a>
-      <a href="/stats">Stats API</a>
-      <a href="/explore">Explore API</a>
-      <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
+  </section>
+
+  <!-- Features -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Everything Your Token Needs</h2>
+        <p>Stop building tokenomics from scratch. We handle the infrastructure.</p>
+      </div>
+      <div class="features">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>One API Call</h3>
+          <p>Register your token in seconds. No smart contracts to deploy.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Automatic Buybacks</h3>
+          <p>Price floor protection built-in. Tokens get bought back every trade.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💎</div>
+          <h3>Staking Rewards</h3>
+          <p>Holders earn yield just by staking. Powered by trading fees.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>Creator Revenue</h3>
+          <p>Get paid on every trade. Real, sustainable income from your token.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔌</div>
+          <h3>Full API Access</h3>
+          <p>Build custom integrations. Webhooks, stats, everything exposed.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>Works Everywhere</h3>
+          <p>Pump.fun, Raydium, Jupiter — we integrate with all Solana DEXs.</p>
+        </div>
+      </div>
     </div>
-    <p>Earn Wallet: <code style="color: #00FF88;">${earnWallet?.publicKey?.toString() || 'Loading...'}</code></p>
-  </footer>
-  
-  <script>
-    // Switch tab function (for CTA buttons)
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      document.querySelector(\`[data-tab="\${tabId}"]\`).classList.add('active');
-      document.getElementById(tabId).classList.add('active');
-    }
-    
-    // Tab switching
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        switchTab(tab.dataset.tab);
-      });
-    });
-    
-    // Format numbers
-    function formatNumber(n) {
-      if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
-      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-      return n?.toFixed?.(2) || n || '0';
-    }
-    
-    function formatUSD(n) {
-      if (!n) return '$0';
-      return '$' + formatNumber(n);
-    }
-    
-    // Load stats
-    async function loadStats() {
-      try {
-        const res = await fetch('/stats');
-        const data = await res.json();
-        if (data.success) {
-          document.getElementById('statTokens').textContent = data.totalLaunches || 0;
-          document.getElementById('statAgents').textContent = data.totalAgents || 0;
-          document.getElementById('statVolume').textContent = formatUSD(data.totalVolume24h);
-          document.getElementById('statStaking').textContent = data.staking?.totalStakedValue || '-';
-        }
-      } catch (e) {
-        console.error('Failed to load stats:', e);
-      }
-    }
-    
-    // Load tokens
-    async function loadTokens() {
-      try {
-        const res = await fetch('/explore?limit=20&includePrice=true');
-        const data = await res.json();
-        const container = document.getElementById('tokenList');
-        
-        if (!data.success || !data.tokens?.length) {
-          container.innerHTML = \`
-            <div class="empty-state" style="grid-column: 1/-1;">
-              <h3>No tokens launched yet</h3>
-              <p>Be the first! Switch to the Launch tab to create a token.</p>
-            </div>
-          \`;
-          return;
-        }
-        
-        container.innerHTML = data.tokens.map(token => \`
-          <div class="token-card">
-            <div class="token-header">
-              <img src="\${token.uri || token.image || '/logo.jpg'}" alt="\${token.name}" class="token-img" onerror="this.src='/logo.jpg'">
-              <div>
-                <div class="token-name">\${token.name}</div>
-                <div class="token-symbol">\${token.symbol} <span class="token-badge \${token.tokenomics}">\${token.tokenomics}</span></div>
-              </div>
-            </div>
-            <div class="token-stats">
-              <div>
-                <div class="token-stat-label">Price</div>
-                <div class="token-stat-value">\${token.price ? formatUSD(token.price) : '-'}</div>
-              </div>
-              <div>
-                <div class="token-stat-label">24h Change</div>
-                <div class="token-stat-value \${(token.priceChange24h || 0) >= 0 ? 'positive' : 'negative'}">
-                  \${token.priceChange24h ? (token.priceChange24h >= 0 ? '+' : '') + token.priceChange24h.toFixed(2) + '%' : '-'}
-                </div>
-              </div>
-              <div>
-                <div class="token-stat-label">24h Volume</div>
-                <div class="token-stat-value">\${token.volume24h ? formatUSD(token.volume24h) : '-'}</div>
-              </div>
-              <div>
-                <div class="token-stat-label">Market Cap</div>
-                <div class="token-stat-value">\${token.marketCap ? formatUSD(token.marketCap) : '-'}</div>
-              </div>
-            </div>
-            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-              <a href="https://pump.fun/\${token.mint}" target="_blank" style="flex:1; text-align:center; padding:0.5rem; background:#1a1a1a; border-radius:6px; font-size:0.85rem;">Trade ↗</a>
-              <a href="https://solscan.io/token/\${token.mint}" target="_blank" style="flex:1; text-align:center; padding:0.5rem; background:#1a1a1a; border-radius:6px; font-size:0.85rem;">Solscan ↗</a>
-            </div>
+  </section>
+
+  <!-- Launch Form -->
+  <section id="launch" class="section launch-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Launch Your Token</h2>
+        <p>Fill in the details and we'll create your token on Pump.fun</p>
+      </div>
+      <div class="launch-inner">
+        <form id="launchForm">
+          <div class="form-group">
+            <label>Token Name</label>
+            <input type="text" class="form-input" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
           </div>
-        \`).join('');
-      } catch (e) {
-        console.error('Failed to load tokens:', e);
-        document.getElementById('tokenList').innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><h3>Failed to load tokens</h3><p>Please try again later.</p></div>';
-      }
-    }
-    
-    // Launch form
+          <div class="form-group">
+            <label>Ticker</label>
+            <input type="text" class="form-input" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Image URL</label>
+            <input type="url" class="form-input" id="image" placeholder="https://example.com/logo.png" required>
+          </div>
+          <div class="form-group">
+            <label>Description <span>(optional)</span></label>
+            <textarea class="form-input" id="description" placeholder="What makes your token special?"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Tokenomics Template</label>
+            <select class="form-input" id="tokenomics" required>
+              <option value="degen">🎰 Degen — 40% Creator / 30% Earn / 30% Stakers</option>
+              <option value="creator">🎨 Creator — 50% Creator / 25% Earn / 25% Stakers</option>
+              <option value="community">🏛️ Community — 25% Creator / 25% Earn / 50% Stakers</option>
+              <option value="lowfee">💰 Low Fee — 40% Creator / 30% Earn / 30% Stakers</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Your Wallet <span>(optional — defaults to Earn wallet)</span></label>
+            <input type="text" class="form-input" id="agentWallet" placeholder="Your Solana wallet address">
+          </div>
+          <button type="submit" class="form-submit" id="submitBtn">🚀 Launch Token</button>
+        </form>
+        <div id="result" class="form-result">
+          <pre id="resultContent"></pre>
+        </div>
+        
+        <!-- Agent Discovery -->
+        <div class="agent-banner">
+          <h3>🤖 Building an AI Agent?</h3>
+          <p>Integrate Earn Protocol into your agent with these resources:</p>
+          <div class="agent-links">
+            <a href="/.well-known/ai-plugin.json" class="agent-link"><code>ai-plugin.json</code></a>
+            <a href="/openapi.json" class="agent-link"><code>openapi.json</code></a>
+            <a href="/llm.txt" class="agent-link"><code>llm.txt</code></a>
+            <a href="/docs" class="agent-link">API Docs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="/docs">API Documentation</a>
+        <a href="/explore">Explore Tokens</a>
+        <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
+        <a href="https://earn.supply" target="_blank">Dashboard</a>
+      </div>
+      <p class="footer-tagline">Built for <span>Solana</span> • Powered by Pump.fun</p>
+    </div>
+  </footer>
+
+  <script>
     const form = document.getElementById('launchForm');
     const result = document.getElementById('result');
     const resultContent = document.getElementById('resultContent');
@@ -1222,31 +1330,21 @@ app.get('/', (req, res) => {
         });
         const json = await res.json();
         
-        result.className = 'result show ' + (json.success ? 'success' : 'error');
+        result.className = 'form-result show ' + (json.success ? 'success' : 'error');
         resultContent.textContent = JSON.stringify(json, null, 2);
-        
-        if (json.success) {
-          loadStats();
-          loadTokens();
-        }
       } catch (err) {
-        result.className = 'result show error';
+        result.className = 'form-result show error';
         resultContent.textContent = 'Error: ' + err.message;
       }
       
       submitBtn.disabled = false;
       submitBtn.textContent = '🚀 Launch Token';
     });
-    
-    // Init
-    loadStats();
-    loadTokens();
   </script>
 </body>
 </html>`;
   res.type('text/html').send(html);
 });
-
 // API Documentation page
 app.get('/docs', (req, res) => {
   const docsHtml = `<!DOCTYPE html>
