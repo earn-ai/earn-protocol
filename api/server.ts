@@ -515,6 +515,11 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Serve logo
+app.get('/logo.jpg', (req, res) => {
+  res.sendFile('earn-logo.jpg', { root: __dirname });
+});
+
 // Skill.md for agents
 app.get('/skill.md', (req, res) => {
   res.type('text/markdown').send(SKILL_MD);
@@ -558,7 +563,7 @@ app.get('/', (req, res) => {
 </head>
 <body>
   <div class="container">
-    <h1>🚀 <span>Earn</span> Protocol</h1>
+    <h1><img src="/logo.jpg" alt="Earn" style="height:2.5rem;vertical-align:middle;margin-right:0.5rem;border-radius:8px;"><span>Earn</span> Protocol</h1>
     <p class="subtitle">Launch a token on Pump.fun. Earn handles everything. You get paid.</p>
     
     <form id="launchForm">
