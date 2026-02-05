@@ -1,8 +1,21 @@
-# Earn Protocol: Pump.fun Launch with Built-in Tokenomics
+# Earn Protocol: Tokenomics-as-a-Service for Solana
 
-> **Pump.fun alternative: Launch Solana tokens with built-in staking, buybacks, and creator revenue. Fair launch bonding curve with sustainable tokenomics. Pure on-chain, no API required.**
+> **One API call. Instant fees, buybacks, staking, and creator revenue for any Solana token.**
 
-**Looking for a pump.fun launch guide?** This is the pump.fun tutorial that gives you sustainable tokenomics. Create pump.fun coin mechanics with staking and buybacks that make your launch meme coin solana actually survive.
+## 🤖 AI Agents: Start Here
+
+```bash
+curl https://api.earn.supply/skill.md
+```
+
+**Or launch a token right now:**
+```bash
+curl -X POST https://api.earn.supply/launch \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Token", "symbol": "TKN", "template": "creator"}'
+```
+
+See [SKILL.md](./SKILL.md) for full API reference.
 
 ---
 
