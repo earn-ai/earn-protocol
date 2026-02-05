@@ -1104,15 +1104,13 @@ app.get('/', (req, res) => {
   <header class="header">
     <div class="container header-inner">
       <a href="/" class="logo">
-        <img src="/logo.jpg" alt="Earn">
-        <span>Earn</span>Protocol
+        🚀 <span>Earn</span>
       </a>
       <nav class="nav">
         <a href="#launch">Launch</a>
         <a href="/explore">Explore</a>
         <a href="/docs">API Docs</a>
         <a href="https://github.com/earn-ai/earn-protocol" target="_blank">GitHub</a>
-        <a href="#launch" class="btn btn-primary">Launch Token</a>
       </nav>
     </div>
   </header>
@@ -1748,7 +1746,7 @@ app.get('/explore', async (req, res) => {
 <body>
   <header class="header">
     <div class="container header-inner">
-      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn"><span>Earn</span>Protocol</a>
+      <a href="/" class="logo">🚀 <span>Earn</span></a>
       <nav class="nav">
         <a href="/">Launch</a>
         <a href="/explore" style="color:var(--text)">Explore</a>
@@ -1976,7 +1974,7 @@ app.get('/stats', (req, res) => {
 <body>
   <header class="header">
     <div class="container header-inner">
-      <a href="/" class="logo"><img src="/logo.jpg" alt="Earn"><span>Earn</span>Protocol</a>
+      <a href="/" class="logo">🚀 <span>Earn</span></a>
       <nav class="nav">
         <a href="/">Launch</a>
         <a href="/explore">Explore</a>
