@@ -19,7 +19,8 @@ import { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, ComputeB
 import { createAssociatedTokenAccountIdempotentInstruction, getAssociatedTokenAddressSync, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { StakingClient, getStakingPoolPDA, getStakeAccountPDA, STAKING_PROGRAM_ID } from './staking-client';
 import * as supabase from './supabase';
-import * as birdeye from './birdeye';
+import * as tokenData from './token-data';
+import * as helius from './helius';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,7 +28,7 @@ import * as crypto from 'crypto';
 
 // Feature flags
 const USE_SUPABASE = supabase.isSupabaseConfigured();
-const USE_BIRDEYE = birdeye.isBirdeyeConfigured();
+const USE_HELIUS = helius.isHeliusConfigured();
 
 // ============ CONFIG ============
 
@@ -475,6 +476,18 @@ curl https://api.earn.supply/api/stats
 
 Currently on **Solana Devnet**. Mainnet coming soon.
 
+## 🔑 For Enhanced Data (Optional)
+
+Price data uses **DexScreener** (free, no key needed).
+
+For richer metadata, set up **Helius**:
+\`\`\`bash
+npm install -g helius-cli && helius login
+# Or get a key at: https://dev.helius.xyz
+\`\`\`
+
+Set \`HELIUS_API_KEY\` to unlock token metadata, balances, and tx history.
+
 ---
 
 Built by Earn for the Colosseum Agent Hackathon 🚀
@@ -563,7 +576,8 @@ app.get('/debug', (req, res) => {
     hasSupabaseKey: !!process.env.SUPABASE_KEY,
     hasEarnWalletKey: !!process.env.EARN_WALLET_KEY,
     supabaseConfigured: USE_SUPABASE,
-    birdeyeConfigured: USE_BIRDEYE,
+    heliusConfigured: USE_HELIUS,
+    priceApiAvailable: tokenData.isPriceApiAvailable(),
     isServerless: IS_SERVERLESS,
     nodeEnv: process.env.NODE_ENV,
   });
@@ -807,10 +821,20 @@ All endpoints return JSON with { success: boolean, ...data }
 ## No Authentication Required
 All endpoints are public.
 
+## Data Sources
+- Price data: DexScreener (free, no key)
+- Token metadata: Helius DAS API (optional, for enhanced data)
+
+## Get Your Own Helius Key (Optional)
+AI agents can self-provision Helius keys for enhanced metadata:
+  npm install -g helius-cli && helius login
+Or visit: https://dev.helius.xyz
+
 ## More Info
 - Website: https://earn.supply
 - GitHub: https://github.com/earn-ai/earn-protocol
 - OpenAPI Spec: https://api.earn.supply/openapi.json
+- Full Skill: https://api.earn.supply/skill.md
 `);
 });
 
@@ -1530,7 +1554,7 @@ app.get('/api/explore', async (req, res) => {
     
     if (includePrice === 'true' && tokens.length > 0) {
       const mints = tokens.map(t => t.mint);
-      const prices = await birdeye.getMultipleTokenPrices(mints);
+      const prices = await tokenData.getMultipleTokenPrices(mints);
       tokens = tokens.map(token => ({
         ...token,
         price: prices.get(token.mint)?.price || null,

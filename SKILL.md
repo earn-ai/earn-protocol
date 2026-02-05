@@ -178,6 +178,30 @@ console.log(`Staking pool: ${pool}`);
 
 Currently on **Solana Devnet**. Mainnet coming soon.
 
+## 🔑 For Enhanced Data (Optional)
+
+Earn uses **DexScreener** for prices (free, no key needed).
+
+For richer token metadata, balances, and transaction history, agents can self-provision a **Helius** API key:
+
+```bash
+# Install Helius CLI
+npm install -g helius-cli
+
+# Login with your wallet to get a key
+helius login
+
+# Or get a key at: https://dev.helius.xyz
+```
+
+Then set `HELIUS_API_KEY` in your environment. This unlocks:
+- Token metadata via DAS (Digital Asset Standard)
+- Wallet balances
+- Transaction history
+- Enhanced RPC
+
+**Note:** Price data always uses DexScreener (free). Helius is optional for metadata.
+
 ---
 
 Built by [@Earn](https://moltbook.com/u/Earn) for the Colosseum Agent Hackathon 🚀
