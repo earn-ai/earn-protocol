@@ -1087,17 +1087,6 @@ app.get('/', (req, res) => {
     </div>
   </header>
 
-  <!-- Hero -->
-  <section class="hero">
-    <div class="container">
-      <h1>Make Your Memecoin<br><em>Immortal</em></h1>
-      <p>One API call. Instant fees, buybacks, staking, and creator revenue. Built for Solana.</p>
-      <div class="hero-buttons">
-        <a href="#launch" class="btn btn-primary">🚀 Launch Token</a>
-        <a href="/explore" class="btn btn-secondary">Explore Tokens →</a>
-      </div>
-    </div>
-  </section>
   <!-- Launch Form -->
   <section id="launch" class="section launch-section">
     <div class="container">
