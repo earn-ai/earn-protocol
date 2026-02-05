@@ -20,7 +20,7 @@
 **ONE-CLICK ONBOARDING** - Just say "make my token legit":
 
 ```bash
-curl -X POST https://earn-protocol.onrender.com/earn/onboard \
+curl -X POST https://api.earn.supply/earn/onboard \
   -H "Content-Type: application/json" \
   -d '{
     "tokenMint": "YOUR_TOKEN_MINT",
@@ -63,7 +63,7 @@ For more control, use the register endpoint directly:
 
 ```bash
 # Register your token with Earn Protocol
-curl -X POST https://earn-protocol.onrender.com/earn/register \
+curl -X POST https://api.earn.supply/earn/register \
   -H "Content-Type: application/json" \
   -H "x-creator-wallet: YOUR_WALLET_ADDRESS" \
   -d '{
@@ -142,7 +142,7 @@ For AI agents using Python:
 import requests
 
 class EarnProtocol:
-    BASE_URL = "https://earn-protocol.onrender.com"
+    BASE_URL = "https://api.earn.supply"
     
     def __init__(self, creator_wallet: str):
         self.creator_wallet = creator_wallet
@@ -277,7 +277,7 @@ console.log({
 
 ### Base URL
 ```
-https://earn-protocol.onrender.com
+https://api.earn.supply
 ```
 
 ### Endpoints
@@ -364,15 +364,15 @@ tools = [
 tools:
   earn_protocol:
     register:
-      endpoint: https://earn-protocol.onrender.com/earn/register
+      endpoint: https://api.earn.supply/earn/register
       method: POST
       headers:
         x-creator-wallet: ${CREATOR_WALLET}
     stats:
-      endpoint: https://earn-protocol.onrender.com/earn/token/{mint}/stats
+      endpoint: https://api.earn.supply/earn/token/{mint}/stats
       method: GET
     rewards:
-      endpoint: https://earn-protocol.onrender.com/earn/rewards/{mint}/{wallet}
+      endpoint: https://api.earn.supply/earn/rewards/{mint}/{wallet}
       method: GET
 ```
 
@@ -388,7 +388,7 @@ const tokenMint = "DEMO_TOKEN_MINT"; // From pump.fun or your own mint
 const template = "community"; // Agent wants community governance
 
 // 3. Register with Earn Protocol
-const registration = await fetch('https://earn-protocol.onrender.com/earn/register', {
+const registration = await fetch('https://api.earn.supply/earn/register', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -416,7 +416,7 @@ Stake your tokens: https://earn.supply/stake/${tokenMint}
 
 // 5. Monitor performance
 setInterval(async () => {
-  const stats = await fetch(`https://earn-protocol.onrender.com/earn/token/${tokenMint}/stats`);
+  const stats = await fetch(`https://api.earn.supply/earn/token/${tokenMint}/stats`);
   const data = await stats.json();
   
   console.log(`
@@ -446,4 +446,4 @@ setInterval(async () => {
 
 - GitHub: https://github.com/earn-ai/earn-protocol
 - Website: https://earn.supply
-- API Status: https://earn-protocol.onrender.com/health
+- API Status: https://api.earn.supply/health

@@ -158,7 +158,7 @@ Options:
 
 ## What Gets Deleted
 
-- ❌ Render API (earn-protocol.onrender.com)
+- ❌ Vercel API (api.earn.supply)
 - ❌ Express server (src/api.ts)
 - ❌ All backend routes
 - ❌ Database/state management

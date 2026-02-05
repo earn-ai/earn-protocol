@@ -7,7 +7,7 @@
  * Run: npx ts-node examples/agent-launch-demo.ts
  */
 
-const EARN_API = 'https://earn-protocol.onrender.com';
+const EARN_API = 'https://api.earn.supply';
 
 // Demo configuration
 const DEMO_CONFIG = {

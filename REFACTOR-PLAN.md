@@ -24,7 +24,7 @@ Earn = Pump.fun wrapper + tokenomics router + revenue distribution
 - [ ] `src/protocol.ts` - TypeScript SDK
 - [ ] `src/types.ts` - API types
 - [ ] All `/earn/*` REST endpoints
-- [ ] Render deployment (earn-protocol.onrender.com)
+- [ ] Vercel deployment (api.earn.supply)
 - [ ] Any backend/database code
 
 ## Solana Program Changes

@@ -119,8 +119,11 @@ All on-chain. No external dependencies. No API.
 
 ## Links
 
-- **Earn Wallet:** `EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ`
-- **SKILL.md:** Complete agent integration guide
+- **🚀 API:** https://api.earn.supply
+- **🌐 Dashboard:** https://earn.supply
+- **💰 Earn Wallet:** `EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ`
+- **📖 API Docs:** https://api.earn.supply/docs
+- **📜 SKILL.md:** Complete agent integration guide
 - **GitHub:** https://github.com/earn-ai/earn-protocol
 
 ---
