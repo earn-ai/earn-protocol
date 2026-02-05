@@ -252,26 +252,52 @@ async function uploadToIPFS(
 }
 
 // Calculate global stats with caching
-let statsCache: { stats: GlobalStats; tokenCount: number; cachedAt: number } | null = null;
-const STATS_CACHE_TTL_MS = 10000; // 10 second cache
+let statsCache: { stats: GlobalStats; cachedAt: number } | null = null;
+const STATS_CACHE_TTL_MS = 30000; // 30 second cache (longer for RPC calls)
 
-function calculateStats(): GlobalStats {
+async function calculateStatsAsync(): Promise<GlobalStats> {
   const now = Date.now();
-  const currentCount = tokenRegistry.size;
   
-  // Return cached stats if still valid and token count unchanged
-  if (statsCache && 
-      now - statsCache.cachedAt < STATS_CACHE_TTL_MS && 
-      statsCache.tokenCount === currentCount) {
+  // Return cached stats if still valid
+  if (statsCache && now - statsCache.cachedAt < STATS_CACHE_TTL_MS) {
     return statsCache.stats;
   }
   
-  const tokens = Array.from(tokenRegistry.values());
-  const agents = new Set(tokens.map(t => t.agentWallet));
+  let tokens: any[] = [];
+  
+  // Get tokens from Supabase if configured
+  if (USE_SUPABASE) {
+    try {
+      const result = await supabase.getAllTokens({ page: 1, limit: 1000 });
+      tokens = result.tokens;
+    } catch (e) {
+      console.error('Failed to fetch tokens from Supabase:', e);
+    }
+  }
+  
+  // Fallback to in-memory registry
+  if (tokens.length === 0) {
+    tokens = Array.from(tokenRegistry.values());
+  }
+  
+  const agents = new Set(tokens.map(t => t.agentWallet || t.creator));
   const byTokenomics: Record<string, number> = {};
   
   for (const token of tokens) {
-    byTokenomics[token.tokenomics] = (byTokenomics[token.tokenomics] || 0) + 1;
+    const template = token.tokenomics || token.template || 'unknown';
+    byTokenomics[template] = (byTokenomics[template] || 0) + 1;
+  }
+  
+  // Get on-chain stats if Helius is configured
+  let onChainStats: any = null;
+  if (USE_HELIUS) {
+    try {
+      // Get Earn wallet SOL balance
+      const solBalance = await helius.getSolBalance(earnWallet.publicKey.toString());
+      onChainStats = { earnWalletBalance: solBalance };
+    } catch (e) {
+      console.error('Failed to fetch on-chain stats:', e);
+    }
   }
   
   const stats: GlobalStats = {
@@ -279,14 +305,43 @@ function calculateStats(): GlobalStats {
     totalAgents: agents.size,
     launchesByTokenomics: byTokenomics,
     lastLaunch: tokens.length > 0 
-      ? tokens.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
+      ? tokens.sort((a, b) => new Date(b.createdAt || b.created_at).getTime() - new Date(a.createdAt || a.created_at).getTime())[0].createdAt || tokens[0].created_at
       : null,
+    ...(onChainStats || {}),
   };
   
   // Cache the stats
-  statsCache = { stats, tokenCount: currentCount, cachedAt: now };
+  statsCache = { stats, cachedAt: now };
   
   return stats;
+}
+
+// Sync wrapper for backwards compatibility
+function calculateStats(): GlobalStats {
+  // Return cached if available, otherwise return defaults
+  if (statsCache && Date.now() - statsCache.cachedAt < STATS_CACHE_TTL_MS) {
+    return statsCache.stats;
+  }
+  
+  // Trigger async refresh in background
+  calculateStatsAsync().catch(console.error);
+  
+  // Return from memory registry as fallback
+  const tokens = Array.from(tokenRegistry.values());
+  const agents = new Set(tokens.map(t => t.agentWallet));
+  const byTokenomics: Record<string, number> = {};
+  for (const token of tokens) {
+    byTokenomics[token.tokenomics] = (byTokenomics[token.tokenomics] || 0) + 1;
+  }
+  
+  return {
+    totalLaunches: tokens.length,
+    totalAgents: agents.size,
+    launchesByTokenomics: byTokenomics,
+    lastLaunch: tokens.length > 0 
+      ? tokens.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0].createdAt
+      : null,
+  };
 }
 
 // ============ RATE LIMITING ============
@@ -1750,8 +1805,8 @@ app.get('/stats', (req, res) => {
 });
 
 // Global stats API
-app.get('/api/stats', (req, res) => {
-  const stats = calculateStats();
+app.get('/api/stats', async (req, res) => {
+  const stats = await calculateStatsAsync();
   res.json({
     success: true,
     earnWallet: earnWallet.publicKey.toString(),
@@ -2159,20 +2214,72 @@ app.post('/launch', rateLimit, async (req, res) => {
 });
 
 // Get token info
-app.get('/token/:mint', (req, res) => {
-  const config = tokenRegistry.get(req.params.mint);
+app.get('/token/:mint', async (req, res) => {
+  const mint = req.params.mint;
+  
+  // Try Supabase first
+  let config: any = null;
+  if (USE_SUPABASE) {
+    try {
+      config = await supabase.getToken(mint);
+    } catch (e) {
+      console.error('Supabase token fetch failed:', e);
+    }
+  }
+  
+  // Fallback to in-memory registry
+  if (!config) {
+    config = tokenRegistry.get(mint);
+  }
+  
   if (!config) {
     return res.status(404).json({ success: false, error: 'Token not found' });
   }
   
   const isDevnet = RPC_URL.includes('devnet');
+  
+  // Enrich with on-chain metadata if Helius is configured
+  let onChainMetadata: any = null;
+  if (USE_HELIUS) {
+    try {
+      onChainMetadata = await helius.getTokenMetadata(mint);
+    } catch (e) {
+      // Metadata fetch is optional
+    }
+  }
+  
+  // Get price data from DexScreener
+  let priceData: any = null;
+  if (!isDevnet) {
+    try {
+      priceData = await tokenData.getTokenPrice(mint);
+    } catch (e) {
+      // Price fetch is optional
+    }
+  }
+  
   res.json({ 
     success: true, 
     ...config,
-    pumpfun: `https://pump.fun/${config.mint}`,
+    // Merge on-chain metadata if available
+    ...(onChainMetadata ? {
+      onChainName: onChainMetadata.name,
+      onChainSymbol: onChainMetadata.symbol,
+      decimals: onChainMetadata.decimals,
+      image: onChainMetadata.image || config.image,
+    } : {}),
+    // Merge price data if available
+    ...(priceData ? {
+      price: priceData.price,
+      priceChange24h: priceData.priceChange24h,
+      volume24h: priceData.volume24h,
+      marketCap: priceData.marketCap,
+      liquidity: priceData.liquidity,
+    } : {}),
+    pumpfun: `https://pump.fun/${mint}`,
     solscan: isDevnet
-      ? `https://solscan.io/token/${config.mint}?cluster=devnet`
-      : `https://solscan.io/token/${config.mint}`,
+      ? `https://solscan.io/token/${mint}?cluster=devnet`
+      : `https://solscan.io/token/${mint}`,
   });
 });
 
