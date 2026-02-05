@@ -1219,6 +1219,14 @@ app.get('/', (req, res) => {
             <textarea class="form-input" id="description" placeholder="What makes your token special?"></textarea>
           </div>
           <div class="form-group">
+            <label>Website <span>(optional)</span></label>
+            <input type="url" class="form-input" id="website" placeholder="https://mytoken.com">
+          </div>
+          <div class="form-group">
+            <label>X (Twitter) <span>(optional)</span></label>
+            <input type="url" class="form-input" id="twitter" placeholder="https://x.com/mytoken">
+          </div>
+          <div class="form-group">
             <label>Tokenomics Template</label>
             <select class="form-input" id="tokenomics" required>
               <option value="degen">🎰 Degen — 40% Creator / 30% Earn / 30% Stakers</option>
@@ -1526,6 +1534,8 @@ app.get('/', (req, res) => {
         image: imageValue,
         tokenomics: document.getElementById('tokenomics').value,
         description: document.getElementById('description').value || undefined,
+        website: document.getElementById('website').value || undefined,
+        twitter: document.getElementById('twitter').value || undefined,
       };
       const wallet = document.getElementById('agentWallet').value;
       if (wallet) data.agentWallet = wallet;
