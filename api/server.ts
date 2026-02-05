@@ -1809,39 +1809,25 @@ app.get('/explore', async (req, res) => {
           return;
         }
         
-        grid.innerHTML = data.tokens.map(t => \\\`
-          <div class="token-card">
-            <div class="token-header">
-              <img src="\\\${t.uri || t.image || '/logo.jpg'}" class="token-icon" onerror="this.src='/logo.jpg'">
-              <div>
-                <div class="token-name">\\\${t.name} <span class="token-badge \\\${t.tokenomics}">\\\${t.tokenomics}</span></div>
-                <div class="token-symbol">\\\${t.symbol}</div>
-              </div>
-            </div>
-            <div class="token-stats">
-              <div class="token-stat">
-                <div class="token-stat-label">Price</div>
-                <div class="token-stat-value">\\\${t.price ? '$' + t.price.toFixed(6) : '-'}</div>
-              </div>
-              <div class="token-stat">
-                <div class="token-stat-label">24h Change</div>
-                <div class="token-stat-value \\\${(t.priceChange24h || 0) >= 0 ? 'positive' : 'negative'}">\\\${t.priceChange24h ? (t.priceChange24h >= 0 ? '+' : '') + t.priceChange24h.toFixed(1) + '%' : '-'}</div>
-              </div>
-              <div class="token-stat">
-                <div class="token-stat-label">24h Volume</div>
-                <div class="token-stat-value">\\\${t.volume24h ? '$' + formatNum(t.volume24h) : '-'}</div>
-              </div>
-              <div class="token-stat">
-                <div class="token-stat-label">Creator Cut</div>
-                <div class="token-stat-value">\\\${(t.agent_cut_bps/100).toFixed(0)}%</div>
-              </div>
-            </div>
-            <div class="token-actions">
-              <a href="https://pump.fun/\\\${t.mint}" target="_blank">Trade ↗</a>
-              <a href="https://solscan.io/token/\\\${t.mint}" target="_blank">Solscan ↗</a>
-            </div>
-          </div>
-        \\\`).join('');
+        grid.innerHTML = data.tokens.map(function(t) {
+          return '<div class="token-card">' +
+            '<div class="token-header">' +
+            '<img src="' + (t.uri || t.image || '/logo.jpg') + '" class="token-icon" onerror="this.src=\\'/logo.jpg\\'">' +
+            '<div>' +
+            '<div class="token-name">' + t.name + ' <span class="token-badge ' + t.tokenomics + '">' + t.tokenomics + '</span></div>' +
+            '<div class="token-symbol">' + t.symbol + '</div>' +
+            '</div></div>' +
+            '<div class="token-stats">' +
+            '<div class="token-stat"><div class="token-stat-label">Price</div><div class="token-stat-value">' + (t.price ? '$' + t.price.toFixed(6) : '-') + '</div></div>' +
+            '<div class="token-stat"><div class="token-stat-label">24h Change</div><div class="token-stat-value ' + ((t.priceChange24h || 0) >= 0 ? 'positive' : 'negative') + '">' + (t.priceChange24h ? (t.priceChange24h >= 0 ? '+' : '') + t.priceChange24h.toFixed(1) + '%' : '-') + '</div></div>' +
+            '<div class="token-stat"><div class="token-stat-label">24h Volume</div><div class="token-stat-value">' + (t.volume24h ? '$' + formatNum(t.volume24h) : '-') + '</div></div>' +
+            '<div class="token-stat"><div class="token-stat-label">Creator Cut</div><div class="token-stat-value">' + (t.agent_cut_bps/100).toFixed(0) + '%</div></div>' +
+            '</div>' +
+            '<div class="token-actions">' +
+            '<a href="https://pump.fun/' + t.mint + '" target="_blank">Trade ↗</a>' +
+            '<a href="https://solscan.io/token/' + t.mint + '" target="_blank">Solscan ↗</a>' +
+            '</div></div>';
+        }).join('');
       } catch (e) {
         grid.innerHTML = '<div class="empty">Failed to load tokens</div>';
       }
@@ -2074,16 +2060,16 @@ app.get('/stats', (req, res) => {
           return;
         }
         
-        document.getElementById('topTokens').innerHTML = data.tokens.map((t, i) => \\\`
-          <div class="token-row">
-            <span class="token-rank">\\\${i + 1}</span>
-            <div class="token-info">
-              <div class="token-name">\\\${t.name}</div>
-              <div class="token-symbol">\\\${t.symbol}</div>
-            </div>
-            <div class="token-volume">\\\${t.volume24h ? formatNum(t.volume24h) : '-'}</div>
-          </div>
-        \\\`).join('');
+        document.getElementById('topTokens').innerHTML = data.tokens.map(function(t, i) {
+          return '<div class="token-row">' +
+            '<span class="token-rank">' + (i + 1) + '</span>' +
+            '<div class="token-info">' +
+            '<div class="token-name">' + t.name + '</div>' +
+            '<div class="token-symbol">' + t.symbol + '</div>' +
+            '</div>' +
+            '<div class="token-volume">' + (t.volume24h ? formatNum(t.volume24h) : '-') + '</div>' +
+            '</div>';
+        }).join('');
       } catch (e) {
         document.getElementById('topTokens').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">Failed to load</div>';
       }
