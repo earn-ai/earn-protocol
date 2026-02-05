@@ -1098,6 +1098,64 @@ app.get('/', (req, res) => {
       </div>
     </div>
   </section>
+  <!-- Launch Form -->
+  <section id="launch" class="section launch-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Launch Your Token</h2>
+        <p>Fill in the details and we'll create your token on Pump.fun</p>
+      </div>
+      <div class="launch-inner">
+        <form id="launchForm">
+          <div class="form-group">
+            <label>Token Name</label>
+            <input type="text" class="form-input" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
+          </div>
+          <div class="form-group">
+            <label>Ticker</label>
+            <input type="text" class="form-input" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Image URL</label>
+            <input type="url" class="form-input" id="image" placeholder="https://example.com/logo.png" required>
+          </div>
+          <div class="form-group">
+            <label>Description <span>(optional)</span></label>
+            <textarea class="form-input" id="description" placeholder="What makes your token special?"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Tokenomics Template</label>
+            <select class="form-input" id="tokenomics" required>
+              <option value="degen">🎰 Degen — 40% Creator / 30% Earn / 30% Stakers</option>
+              <option value="creator">🎨 Creator — 50% Creator / 25% Earn / 25% Stakers</option>
+              <option value="community">🏛️ Community — 25% Creator / 25% Earn / 50% Stakers</option>
+              <option value="lowfee">💰 Low Fee — 40% Creator / 30% Earn / 30% Stakers</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Your Wallet <span>(optional — defaults to Earn wallet)</span></label>
+            <input type="text" class="form-input" id="agentWallet" placeholder="Your Solana wallet address">
+          </div>
+          <button type="submit" class="form-submit" id="submitBtn">🚀 Launch Token</button>
+        </form>
+        <div id="result" class="form-result">
+          <pre id="resultContent"></pre>
+        </div>
+        
+        <!-- Agent Discovery -->
+        <div class="agent-banner">
+          <h3>🤖 Building an AI Agent?</h3>
+          <p>Integrate Earn Protocol into your agent with these resources:</p>
+          <div class="agent-links">
+            <a href="/.well-known/ai-plugin.json" class="agent-link"><code>ai-plugin.json</code></a>
+            <a href="/openapi.json" class="agent-link"><code>openapi.json</code></a>
+            <a href="/llm.txt" class="agent-link"><code>llm.txt</code></a>
+            <a href="/docs" class="agent-link">API Docs</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- How It Works -->
   <section class="section">
@@ -1229,64 +1287,6 @@ app.get('/', (req, res) => {
     </div>
   </section>
 
-  <!-- Launch Form -->
-  <section id="launch" class="section launch-section">
-    <div class="container">
-      <div class="section-header">
-        <h2>Launch Your Token</h2>
-        <p>Fill in the details and we'll create your token on Pump.fun</p>
-      </div>
-      <div class="launch-inner">
-        <form id="launchForm">
-          <div class="form-group">
-            <label>Token Name</label>
-            <input type="text" class="form-input" id="name" placeholder="My Awesome Token" required minlength="2" maxlength="32">
-          </div>
-          <div class="form-group">
-            <label>Ticker</label>
-            <input type="text" class="form-input" id="ticker" placeholder="MAT" required pattern="[A-Za-z0-9]{2,10}" style="text-transform:uppercase;">
-          </div>
-          <div class="form-group">
-            <label>Image URL</label>
-            <input type="url" class="form-input" id="image" placeholder="https://example.com/logo.png" required>
-          </div>
-          <div class="form-group">
-            <label>Description <span>(optional)</span></label>
-            <textarea class="form-input" id="description" placeholder="What makes your token special?"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Tokenomics Template</label>
-            <select class="form-input" id="tokenomics" required>
-              <option value="degen">🎰 Degen — 40% Creator / 30% Earn / 30% Stakers</option>
-              <option value="creator">🎨 Creator — 50% Creator / 25% Earn / 25% Stakers</option>
-              <option value="community">🏛️ Community — 25% Creator / 25% Earn / 50% Stakers</option>
-              <option value="lowfee">💰 Low Fee — 40% Creator / 30% Earn / 30% Stakers</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Your Wallet <span>(optional — defaults to Earn wallet)</span></label>
-            <input type="text" class="form-input" id="agentWallet" placeholder="Your Solana wallet address">
-          </div>
-          <button type="submit" class="form-submit" id="submitBtn">🚀 Launch Token</button>
-        </form>
-        <div id="result" class="form-result">
-          <pre id="resultContent"></pre>
-        </div>
-        
-        <!-- Agent Discovery -->
-        <div class="agent-banner">
-          <h3>🤖 Building an AI Agent?</h3>
-          <p>Integrate Earn Protocol into your agent with these resources:</p>
-          <div class="agent-links">
-            <a href="/.well-known/ai-plugin.json" class="agent-link"><code>ai-plugin.json</code></a>
-            <a href="/openapi.json" class="agent-link"><code>openapi.json</code></a>
-            <a href="/llm.txt" class="agent-link"><code>llm.txt</code></a>
-            <a href="/docs" class="agent-link">API Docs</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <!-- Footer -->
   <footer class="footer">
