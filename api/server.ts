@@ -606,10 +606,30 @@ app.get('/', (req, res) => {
   -d '{"name":"...","ticker":"...","image":"...","tokenomics":"degen"}'</pre>
     </div>
     
+    <div style="margin-top: 3rem; padding-top: 2rem; border-top: 1px solid #222;">
+      <h3 style="font-size: 1rem; margin-bottom: 1rem; color: #888;">How It Works</h3>
+      <div style="display: grid; gap: 0.75rem; font-size: 0.9rem; color: #aaa;">
+        <div>1️⃣ You launch a token via this API</div>
+        <div>2️⃣ Earn creates it on Pump.fun as the creator</div>
+        <div>3️⃣ Users trade → creator fees flow to Earn</div>
+        <div>4️⃣ Earn distributes: <span style="color:#22c55e">You</span> + <span style="color:#ef4444">Earn</span> + <span style="color:#3b82f6">Stakers</span></div>
+      </div>
+      
+      <div style="margin-top: 1.5rem; padding: 1rem; background: #111; border-radius: 8px; font-size: 0.85rem; color: #888;">
+        <strong style="color: #ef4444;">Earn Wallet:</strong> ${earnWallet?.publicKey?.toString() || 'Loading...'}<br>
+        <span style="margin-top: 0.5rem; display: block;">
+          💰 Handles all fee collection & distribution<br>
+          🔄 Performs token buybacks<br>
+          💎 Pays staking rewards automatically
+        </span>
+      </div>
+    </div>
+    
     <p style="margin-top: 2rem; color: #666; font-size: 0.85rem;">
       <a href="/skill.md">View full API docs</a> | 
       <a href="/stats">Stats</a> | 
-      <a href="https://earn.supply">Dashboard</a>
+      <a href="https://earn.supply">Dashboard</a> |
+      <a href="https://github.com/earn-ai/earn-protocol">GitHub</a>
     </p>
   </div>
   
