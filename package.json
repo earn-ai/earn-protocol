@@ -26,7 +26,13 @@
     "test:devnet": "ts-node scripts/register-test-token.ts",
     "mcp:test": "ts-node mcp/test-chrome-devtools.ts",
     "mcp:server": "npx chrome-devtools-mcp@latest --no-usage-statistics",
-    "mcp:server:remote": "npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 --no-usage-statistics"
+    "mcp:server:remote": "npx chrome-devtools-mcp@latest --browser-url=http://127.0.0.1:9222 --no-usage-statistics",
+    "social:start": "npx ts-node social/cli.ts start",
+    "social:stop": "npx ts-node social/cli.ts stop",
+    "social:status": "npx ts-node social/cli.ts status",
+    "social:logs": "npx ts-node social/cli.ts logs",
+    "social:run": "npx ts-node social/cli.ts run",
+    "social:test": "npx ts-node social/cli.ts test"
   },
   "keywords": [
     "pump-fun",
