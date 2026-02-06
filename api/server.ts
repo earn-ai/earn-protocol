@@ -2815,6 +2815,43 @@ app.post('/admin/distribute', async (req, res) => {
   }
 });
 
+// Vercel Cron endpoint - runs every 2 hours
+app.get('/api/cron/distribute', async (req, res) => {
+  // Verify Vercel cron secret (Vercel sends this automatically)
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+  
+  // In production, validate the cron secret
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    console.log('⚠️ Unauthorized cron attempt');
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
+  }
+  
+  console.log('\n⏰ Cron distribution triggered');
+  console.log(`   Time: ${new Date().toISOString()}`);
+  
+  try {
+    const { runDistributionCrank } = await import('./crank');
+    const result = await runDistributionCrank();
+    
+    console.log(`   Result: ${result.success ? '✅ Success' : '❌ Failed'}`);
+    console.log(`   Tokens: ${result.tokensProcessed}, SOL: ${result.totalDistributed}`);
+    
+    res.json({
+      success: result.success,
+      timestamp: new Date().toISOString(),
+      ...result,
+    });
+  } catch (e: any) {
+    console.error('Cron distribution failed:', e);
+    res.status(500).json({
+      success: false,
+      error: e.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Get distribution history
 app.get('/admin/distributions', (req, res) => {
   const logPath = path.join(DATA_DIR, 'distributions.json');

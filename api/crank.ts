@@ -1,32 +1,54 @@
 /**
  * Fee Distribution Crank
  * 
- * Periodically:
- * 1. Claim accumulated fees from Pump.fun creator_vault
- * 2. Distribute to agents, Earn treasury, and staking pools
+ * Runs periodically (every 2 hours via Vercel cron) to:
+ * 1. Check Earn wallet for accumulated fees
+ * 2. Distribute fees per token:
+ *    - 20% → Creator wallet (agent)
+ *    - 30% → Buyback & burn (or LP)
+ *    - 50% → Staking pool rewards
  * 
- * Can be run as:
- * - Standalone script: npx ts-node api/crank.ts
- * - Called from API: POST /admin/distribute
- * - Scheduled job (cron)
+ * Run modes:
+ * - Vercel cron: GET /api/cron/distribute
+ * - Manual: POST /admin/distribute
+ * - CLI: npx ts-node api/crank.ts
  */
 
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { PumpSdk, creatorVaultPda } from '@pump-fun/pump-sdk';
+import { 
+  Connection, 
+  Keypair, 
+  PublicKey, 
+  LAMPORTS_PER_SOL, 
+  SystemProgram, 
+  Transaction,
+  sendAndConfirmTransaction
+} from '@solana/web3.js';
+import * as anchor from '@coral-xyz/anchor';
 import bs58 from 'bs58';
 import * as fs from 'fs';
 import * as path from 'path';
+import { executeBuyback } from './buyback';
 
 // ============ CONFIG ============
 
 const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
+const IS_DEVNET = RPC_URL.includes('devnet');
+
+// Wallet loading - supports both file path and base58 env var
 const EARN_WALLET_PATH = process.env.EARN_WALLET || '/home/node/.config/solana/earn-wallet.json';
+const EARN_WALLET_KEY = process.env.EARN_WALLET_KEY; // Base58 private key (for Vercel)
+
 const DATA_DIR = process.env.DATA_DIR || './data';
 const TOKENS_FILE = path.join(DATA_DIR, 'tokens.json');
 const DISTRIBUTION_LOG = path.join(DATA_DIR, 'distributions.json');
 
-// Earn treasury wallet (separate from creator wallet for accounting)
-const EARN_TREASURY = process.env.EARN_TREASURY || 'EARNsm7JPDHeYmmKkEYrzBVYkXot3tdiQW2Q2zWsiTZQ';
+// Staking program
+const STAKING_PROGRAM_ID = new PublicKey('E7JsJuQWGaEYC34AkEv8dcmkKUxR1KqUnje17mNCuTiY');
+const GLOBAL_CONFIG_SEED = 'global_config';
+const STAKING_POOL_SEED = 'staking_pool';
+
+// Minimum balance to keep in wallet (for rent/fees)
+const MIN_WALLET_BALANCE = 0.05; // SOL
 
 // ============ TYPES ============
 
@@ -35,10 +57,10 @@ interface TokenConfig {
   name: string;
   symbol: string;
   agentWallet: string;
-  tokenomics: string;
-  agentCutBps: number;
-  earnCutBps: number;
-  stakingCutBps: number;
+  stakingPool?: string;
+  creatorFeeBps: number;   // Default 2000 (20%)
+  buybackFeeBps: number;   // Default 3000 (30%)
+  stakingFeeBps: number;   // Default 5000 (50%)
 }
 
 interface DistributionRecord {
@@ -46,11 +68,12 @@ interface DistributionRecord {
   mint: string;
   symbol: string;
   totalFees: number;
-  agentAmount: number;
-  earnAmount: number;
+  creatorAmount: number;
+  buybackAmount: number;
   stakingAmount: number;
-  agentWallet: string;
+  creatorWallet: string;
   txSignatures: string[];
+  status: 'success' | 'partial' | 'failed';
 }
 
 interface DistributionLog {
@@ -61,14 +84,29 @@ interface DistributionLog {
 
 // ============ HELPERS ============
 
-function loadKeypair(filepath: string): Keypair {
-  const data = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
-  if (Array.isArray(data)) {
-    return Keypair.fromSecretKey(Uint8Array.from(data));
-  } else if (data.private_key) {
-    return Keypair.fromSecretKey(bs58.decode(data.private_key));
+function loadKeypair(): Keypair {
+  // Try base58 env var first (Vercel deployment)
+  if (EARN_WALLET_KEY) {
+    try {
+      return Keypair.fromSecretKey(bs58.decode(EARN_WALLET_KEY));
+    } catch (e) {
+      console.error('Failed to load wallet from EARN_WALLET_KEY');
+    }
   }
-  throw new Error('Unknown wallet format');
+  
+  // Fall back to file
+  try {
+    const data = JSON.parse(fs.readFileSync(EARN_WALLET_PATH, 'utf-8'));
+    if (Array.isArray(data)) {
+      return Keypair.fromSecretKey(Uint8Array.from(data));
+    } else if (data.private_key) {
+      return Keypair.fromSecretKey(bs58.decode(data.private_key));
+    }
+  } catch (e) {
+    console.error('Failed to load wallet from file');
+  }
+  
+  throw new Error('No wallet available');
 }
 
 function loadTokens(): Map<string, TokenConfig> {
@@ -95,115 +133,237 @@ function loadDistributionLog(): DistributionLog {
 }
 
 function saveDistributionLog(log: DistributionLog): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DISTRIBUTION_LOG, JSON.stringify(log, null, 2));
+  } catch (e) {
+    console.error('Failed to save distribution log:', e);
   }
-  fs.writeFileSync(DISTRIBUTION_LOG, JSON.stringify(log, null, 2));
 }
 
-// ============ CRANK LOGIC ============
+function getStakingPoolPda(mint: PublicKey): PublicKey {
+  const [pda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(STAKING_POOL_SEED), mint.toBuffer()],
+    STAKING_PROGRAM_ID
+  );
+  return pda;
+}
+
+// ============ DISTRIBUTION FUNCTIONS ============
+
+/**
+ * Transfer SOL to creator wallet
+ */
+async function distributeToCreator(
+  connection: Connection,
+  payer: Keypair,
+  creatorWallet: string,
+  amount: number
+): Promise<{ success: boolean; signature?: string; error?: string }> {
+  if (IS_DEVNET) {
+    console.log(`   [SIMULATED] → Creator: ${amount.toFixed(4)} SOL`);
+    return { success: true, signature: 'simulated' };
+  }
+  
+  try {
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: new PublicKey(creatorWallet),
+        lamports: Math.floor(amount * LAMPORTS_PER_SOL),
+      })
+    );
+    
+    const signature = await sendAndConfirmTransaction(connection, tx, [payer]);
+    console.log(`   ✅ Creator transfer: ${signature}`);
+    return { success: true, signature };
+  } catch (e: any) {
+    console.error(`   ❌ Creator transfer failed: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+/**
+ * Deposit rewards to staking pool
+ */
+async function distributeToStakingPool(
+  connection: Connection,
+  payer: Keypair,
+  tokenMint: string,
+  amount: number
+): Promise<{ success: boolean; signature?: string; error?: string }> {
+  if (IS_DEVNET) {
+    console.log(`   [SIMULATED] → Staking Pool: ${amount.toFixed(4)} SOL`);
+    return { success: true, signature: 'simulated' };
+  }
+  
+  try {
+    const mint = new PublicKey(tokenMint);
+    const stakingPool = getStakingPoolPda(mint);
+    
+    // For now, just transfer SOL to the pool PDA
+    // The staking program will need a deposit_rewards instruction
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: payer.publicKey,
+        toPubkey: stakingPool,
+        lamports: Math.floor(amount * LAMPORTS_PER_SOL),
+      })
+    );
+    
+    const signature = await sendAndConfirmTransaction(connection, tx, [payer]);
+    console.log(`   ✅ Staking deposit: ${signature}`);
+    return { success: true, signature };
+  } catch (e: any) {
+    console.error(`   ❌ Staking deposit failed: ${e.message}`);
+    return { success: false, error: e.message };
+  }
+}
+
+// ============ MAIN CRANK ============
 
 export async function runDistributionCrank(): Promise<{
   success: boolean;
   tokensProcessed: number;
   totalDistributed: number;
   errors: string[];
+  details: DistributionRecord[];
 }> {
-  console.log('\n🔄 Starting fee distribution crank...\n');
+  console.log('\n' + '═'.repeat(60));
+  console.log('🔄 EARN PROTOCOL - FEE DISTRIBUTION CRANK');
+  console.log('═'.repeat(60));
+  console.log(`   Time: ${new Date().toISOString()}`);
+  console.log(`   Network: ${IS_DEVNET ? 'DEVNET (simulated)' : 'MAINNET'}`);
   
   const connection = new Connection(RPC_URL, 'confirmed');
-  const earnWallet = loadKeypair(EARN_WALLET_PATH);
-  const pumpSdk = new PumpSdk();
+  let earnWallet: Keypair;
+  
+  try {
+    earnWallet = loadKeypair();
+  } catch (e) {
+    console.error('❌ Failed to load wallet');
+    return {
+      success: false,
+      tokensProcessed: 0,
+      totalDistributed: 0,
+      errors: ['Failed to load wallet'],
+      details: [],
+    };
+  }
+  
   const tokens = loadTokens();
   const log = loadDistributionLog();
   
-  console.log(`📊 Processing ${tokens.size} tokens`);
-  console.log(`💼 Earn Wallet: ${earnWallet.publicKey.toString()}`);
+  console.log(`\n📊 Wallet: ${earnWallet.publicKey.toString()}`);
   
-  // Get Earn's creator vault balance
-  const [creatorVault] = creatorVaultPda(earnWallet.publicKey);
-  console.log(`🏦 Creator Vault: ${creatorVault.toString()}`);
-  
-  let vaultBalance = 0;
+  // Get wallet balance
+  let walletBalance = 0;
   try {
-    const vaultInfo = await connection.getAccountInfo(creatorVault);
-    vaultBalance = vaultInfo ? vaultInfo.lamports / LAMPORTS_PER_SOL : 0;
-    console.log(`   Balance: ${vaultBalance.toFixed(4)} SOL`);
+    walletBalance = await connection.getBalance(earnWallet.publicKey) / LAMPORTS_PER_SOL;
+    console.log(`   Balance: ${walletBalance.toFixed(4)} SOL`);
   } catch (e) {
-    console.log(`   Vault not found or empty`);
+    console.error('   Failed to get balance');
   }
   
-  if (vaultBalance < 0.001) {
-    console.log('\n⚠️ No fees to distribute (vault empty or below minimum)');
+  // Calculate distributable amount (keep minimum for rent/fees)
+  const distributableBalance = Math.max(0, walletBalance - MIN_WALLET_BALANCE);
+  console.log(`   Distributable: ${distributableBalance.toFixed(4)} SOL`);
+  console.log(`   Tokens registered: ${tokens.size}`);
+  
+  if (distributableBalance < 0.001 || tokens.size === 0) {
+    console.log('\n⚠️ Nothing to distribute');
     return {
       success: true,
       tokensProcessed: 0,
       totalDistributed: 0,
       errors: [],
+      details: [],
     };
   }
   
   const errors: string[] = [];
+  const details: DistributionRecord[] = [];
   let tokensProcessed = 0;
   let totalDistributed = 0;
   
-  // Fee distribution is simulated in dev mode
-  // Production: fees are distributed via the staking program
-  
-  console.log('\n📝 Distribution plan (simulated):');
+  console.log('\n' + '─'.repeat(60));
+  console.log('📝 DISTRIBUTION PLAN');
   console.log('─'.repeat(60));
   
+  // Distribute proportionally to each token
+  const perTokenShare = distributableBalance / tokens.size;
+  
   for (const [mint, token] of tokens) {
-    try {
-      // Calculate this token's share of fees
-      // In production: track fees per token on-chain
-      // For now: distribute proportionally
-      const tokenShare = vaultBalance / tokens.size;
-      
-      if (tokenShare < 0.0001) {
-        continue; // Skip tiny amounts
-      }
-      
-      const agentAmount = tokenShare * (token.agentCutBps / 10000);
-      const earnAmount = tokenShare * (token.earnCutBps / 10000);
-      const stakingAmount = tokenShare * (token.stakingCutBps / 10000);
-      
-      console.log(`\n${token.symbol} (${mint.slice(0, 8)}...):`);
-      console.log(`   Total: ${tokenShare.toFixed(4)} SOL`);
-      console.log(`   → Agent (${token.agentCutBps/100}%): ${agentAmount.toFixed(4)} SOL → ${token.agentWallet.slice(0, 8)}...`);
-      console.log(`   → Earn (${token.earnCutBps/100}%): ${earnAmount.toFixed(4)} SOL → Treasury`);
-      console.log(`   → Staking (${token.stakingCutBps/100}%): ${stakingAmount.toFixed(4)} SOL → Pool`);
-      
-      // Record distribution (simulated)
-      const record: DistributionRecord = {
-        timestamp: new Date().toISOString(),
-        mint,
-        symbol: token.symbol,
-        totalFees: tokenShare,
-        agentAmount,
-        earnAmount,
-        stakingAmount,
-        agentWallet: token.agentWallet,
-        txSignatures: ['simulated'], // In production: actual tx signatures
-      };
-      
-      log.distributions.push(record);
-      totalDistributed += tokenShare;
-      tokensProcessed++;
-      
-    } catch (e: any) {
-      errors.push(`${token.symbol}: ${e.message}`);
-      console.error(`   ❌ Error: ${e.message}`);
+    console.log(`\n🪙 ${token.symbol} (${mint.slice(0, 8)}...)`);
+    console.log(`   Share: ${perTokenShare.toFixed(4)} SOL`);
+    
+    const creatorBps = token.creatorFeeBps || 2000;  // 20%
+    const buybackBps = token.buybackFeeBps || 3000;  // 30%
+    const stakingBps = token.stakingFeeBps || 5000;  // 50%
+    
+    const creatorAmount = perTokenShare * (creatorBps / 10000);
+    const buybackAmount = perTokenShare * (buybackBps / 10000);
+    const stakingAmount = perTokenShare * (stakingBps / 10000);
+    
+    console.log(`   → Creator (${creatorBps/100}%): ${creatorAmount.toFixed(4)} SOL`);
+    console.log(`   → Buyback (${buybackBps/100}%): ${buybackAmount.toFixed(4)} SOL`);
+    console.log(`   → Staking (${stakingBps/100}%): ${stakingAmount.toFixed(4)} SOL`);
+    
+    const txSignatures: string[] = [];
+    let status: 'success' | 'partial' | 'failed' = 'success';
+    
+    // 1. Creator distribution
+    if (creatorAmount >= 0.001) {
+      const result = await distributeToCreator(
+        connection, earnWallet, token.agentWallet, creatorAmount
+      );
+      if (result.signature) txSignatures.push(result.signature);
+      if (!result.success) status = 'partial';
     }
-  }
-  
-  console.log('\n' + '─'.repeat(60));
-  console.log(`✅ Processed: ${tokensProcessed} tokens`);
-  console.log(`💰 Total distributed: ${totalDistributed.toFixed(4)} SOL`);
-  
-  if (errors.length > 0) {
-    console.log(`⚠️ Errors: ${errors.length}`);
-    errors.forEach(e => console.log(`   - ${e}`));
+    
+    // 2. Buyback
+    if (buybackAmount >= 0.001) {
+      const result = await executeBuyback(
+        connection, earnWallet, mint, buybackAmount, 'burn', IS_DEVNET
+      );
+      if (result.txSignature) txSignatures.push(result.txSignature);
+      if (!result.success && status === 'success') status = 'partial';
+    }
+    
+    // 3. Staking pool rewards
+    if (stakingAmount >= 0.001) {
+      const result = await distributeToStakingPool(
+        connection, earnWallet, mint, stakingAmount
+      );
+      if (result.signature) txSignatures.push(result.signature);
+      if (!result.success && status === 'success') status = 'partial';
+    }
+    
+    // Record
+    const record: DistributionRecord = {
+      timestamp: new Date().toISOString(),
+      mint,
+      symbol: token.symbol,
+      totalFees: perTokenShare,
+      creatorAmount,
+      buybackAmount,
+      stakingAmount,
+      creatorWallet: token.agentWallet,
+      txSignatures,
+      status,
+    };
+    
+    details.push(record);
+    log.distributions.push(record);
+    
+    if (status === 'failed') {
+      errors.push(`${token.symbol}: Distribution failed`);
+    }
+    
+    tokensProcessed++;
+    totalDistributed += perTokenShare;
   }
   
   // Update log
@@ -211,33 +371,30 @@ export async function runDistributionCrank(): Promise<{
   log.totalDistributed += totalDistributed;
   saveDistributionLog(log);
   
-  console.log('\n📁 Distribution log saved');
+  console.log('\n' + '═'.repeat(60));
+  console.log('📊 SUMMARY');
+  console.log('═'.repeat(60));
+  console.log(`   Tokens processed: ${tokensProcessed}`);
+  console.log(`   Total distributed: ${totalDistributed.toFixed(4)} SOL`);
+  console.log(`   Errors: ${errors.length}`);
+  console.log('═'.repeat(60) + '\n');
   
   return {
     success: errors.length === 0,
     tokensProcessed,
     totalDistributed,
     errors,
+    details,
   };
 }
 
 // ============ CLI ============
 
 async function main() {
-  console.log('═'.repeat(60));
-  console.log('EARN PROTOCOL - FEE DISTRIBUTION CRANK');
-  console.log('═'.repeat(60));
-  
   const result = await runDistributionCrank();
-  
-  console.log('\n═'.repeat(60));
-  console.log('RESULT:', result.success ? '✅ SUCCESS' : '❌ FAILED');
-  console.log('═'.repeat(60));
-  
   process.exit(result.success ? 0 : 1);
 }
 
-// Run if called directly
 if (require.main === module) {
   main().catch(console.error);
 }

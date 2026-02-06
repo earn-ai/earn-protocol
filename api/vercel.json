@@ -11,5 +11,11 @@
       "src": "/(.*)",
       "dest": "server.ts"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/distribute",
+      "schedule": "0 */2 * * *"
+    }
   ]
 }
