@@ -3,7 +3,6 @@ use anchor_lang::prelude::*;
 /// Global configuration for the staking program
 /// PDA: ["global-config"]
 #[account]
-#[derive(Default)]
 pub struct GlobalConfig {
     /// Program authority (can create pools, update config)
     pub authority: Pubkey,
@@ -25,6 +24,20 @@ pub struct GlobalConfig {
     
     /// Reserved for future use
     pub _reserved: [u8; 32],
+}
+
+impl Default for GlobalConfig {
+    fn default() -> Self {
+        Self {
+            authority: Pubkey::default(),
+            earn_wallet: Pubkey::default(),
+            total_pools: 0,
+            total_staked_value: 0,
+            total_rewards_distributed: 0,
+            bump: 0,
+            _reserved: [0u8; 64],
+        }
+    }
 }
 
 impl GlobalConfig {
