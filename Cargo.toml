@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "programs/*"
+    "programs/earn-staking"
 ]
 resolver = "2"
 

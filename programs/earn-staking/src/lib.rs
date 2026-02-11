@@ -6,7 +6,7 @@ pub mod errors;
 
 use instructions::*;
 
-declare_id!("E7JsJuQWGaEYC34AkEv8dcmkKUxR1KqUnje17mNCuTiY");
+declare_id!("6jWG6SLtbXhvwsEMcVc3UmbWHyEHgZkY6NpHn8AmCqYj");
 
 /// Earn Staking Program
 /// 

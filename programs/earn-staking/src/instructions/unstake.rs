@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 use crate::state::{StakingPool, StakeAccount};
 use crate::errors::StakingError;
 
@@ -20,18 +20,21 @@ pub struct Unstake<'info> {
     )]
     pub stake_account: Account<'info, StakeAccount>,
     
+    /// The token mint (needed for transfer_checked)
+    pub mint: InterfaceAccount<'info, Mint>,
+    
     #[account(
         mut,
         constraint = user_token_account.mint == staking_pool.mint,
         constraint = user_token_account.owner == user.key()
     )]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: InterfaceAccount<'info, TokenAccount>,
     
     #[account(
         mut,
         constraint = pool_token_account.mint == staking_pool.mint
     )]
-    pub pool_token_account: Account<'info, TokenAccount>,
+    pub pool_token_account: InterfaceAccount<'info, TokenAccount>,
     
     /// CHECK: Pool authority for signing transfers
     #[account(
@@ -43,7 +46,7 @@ pub struct Unstake<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
     
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
@@ -70,7 +73,7 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     let staked_amount = stake_account.amount;
     stake_account.update_rewards(reward_per_token, staked_amount);
     
-    // Transfer tokens back to user
+    // Transfer tokens back to user (using transfer_checked for Token-2022 compatibility)
     let pool_key = pool.key();
     let seeds = &[
         b"pool-authority",
@@ -79,17 +82,18 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
     ];
     let signer_seeds = &[&seeds[..]];
     
-    let cpi_accounts = Transfer {
+    let cpi_accounts = TransferChecked {
         from: ctx.accounts.pool_token_account.to_account_info(),
         to: ctx.accounts.user_token_account.to_account_info(),
         authority: ctx.accounts.pool_authority.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.to_account_info(),
         cpi_accounts,
         signer_seeds,
     );
-    token::transfer(cpi_ctx, amount)?;
+    token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.mint.decimals)?;
     
     // Update stake amounts
     stake_account.amount = stake_account.amount.saturating_sub(amount);

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface::Mint;
 use crate::state::{GlobalConfig, StakingPool};
 
 #[derive(Accounts)]
@@ -20,8 +21,8 @@ pub struct CreatePool<'info> {
     )]
     pub staking_pool: Account<'info, StakingPool>,
     
-    /// The token mint for this staking pool
-    pub mint: Account<'info, anchor_spl::token::Mint>,
+    /// The token mint for this staking pool (supports both Token and Token-2022)
+    pub mint: InterfaceAccount<'info, Mint>,
     
     /// CHECK: Agent wallet that created the token
     pub agent_wallet: UncheckedAccount<'info>,

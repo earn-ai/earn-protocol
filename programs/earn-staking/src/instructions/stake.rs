@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 use crate::state::{StakingPool, StakeAccount};
 use crate::errors::StakingError;
 
@@ -22,23 +22,26 @@ pub struct Stake<'info> {
     )]
     pub stake_account: Account<'info, StakeAccount>,
     
+    /// The token mint (needed for transfer_checked)
+    pub mint: InterfaceAccount<'info, Mint>,
+    
     #[account(
         mut,
         constraint = user_token_account.mint == staking_pool.mint,
         constraint = user_token_account.owner == user.key()
     )]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: InterfaceAccount<'info, TokenAccount>,
     
     #[account(
         mut,
         constraint = pool_token_account.mint == staking_pool.mint
     )]
-    pub pool_token_account: Account<'info, TokenAccount>,
+    pub pool_token_account: InterfaceAccount<'info, TokenAccount>,
     
     #[account(mut)]
     pub user: Signer<'info>,
     
-    pub token_program: Program<'info, Token>,
+    pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
@@ -70,14 +73,15 @@ pub fn handler(ctx: Context<Stake>, amount: u64) -> Result<()> {
         pool.staker_count = pool.staker_count.saturating_add(1);
     }
     
-    // Transfer tokens from user to pool
-    let cpi_accounts = Transfer {
+    // Transfer tokens from user to pool (using transfer_checked for Token-2022 compatibility)
+    let cpi_accounts = TransferChecked {
         from: ctx.accounts.user_token_account.to_account_info(),
         to: ctx.accounts.pool_token_account.to_account_info(),
         authority: ctx.accounts.user.to_account_info(),
+        mint: ctx.accounts.mint.to_account_info(),
     };
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    token::transfer(cpi_ctx, amount)?;
+    token_interface::transfer_checked(cpi_ctx, amount, ctx.accounts.mint.decimals)?;
     
     // Update stake amounts
     stake_account.amount = stake_account.amount.saturating_add(amount);

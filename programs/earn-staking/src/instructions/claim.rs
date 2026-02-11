@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
 use crate::state::{GlobalConfig, StakingPool, StakeAccount};
 use crate::errors::StakingError;
 
@@ -65,29 +64,16 @@ pub fn handler(ctx: Context<ClaimRewards>) -> Result<()> {
         StakingError::InsufficientRewards
     );
     
-    // Transfer SOL rewards from vault to user using CPI with PDA signer
-    let pool_key = pool.key();
-    let vault_bump = ctx.bumps.rewards_vault;
-    let vault_seeds = &[
-        b"rewards-vault",
-        pool_key.as_ref(),
-        &[vault_bump],
-    ];
-    let signer_seeds = &[&vault_seeds[..]];
-    
-    invoke_signed(
-        &system_instruction::transfer(
-            &ctx.accounts.rewards_vault.key(),
-            &ctx.accounts.user.key(),
-            rewards_to_claim,
-        ),
-        &[
-            ctx.accounts.rewards_vault.to_account_info(),
-            ctx.accounts.user.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-        signer_seeds,
-    )?;
+    // Transfer SOL rewards from vault to user using direct lamport manipulation
+    // This works because the program has authority over the PDA
+    **ctx.accounts.rewards_vault.try_borrow_mut_lamports()? = 
+        ctx.accounts.rewards_vault.lamports()
+            .checked_sub(rewards_to_claim)
+            .ok_or(StakingError::InsufficientRewards)?;
+    **ctx.accounts.user.try_borrow_mut_lamports()? = 
+        ctx.accounts.user.lamports()
+            .checked_add(rewards_to_claim)
+            .ok_or(StakingError::Overflow)?;
     
     // Update state
     stake_account.rewards_earned = 0;
