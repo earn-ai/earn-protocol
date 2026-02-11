@@ -148,7 +148,7 @@ Shows:
 
 ### Phase 2 (Post-Hackathon)
 - [ ] Dashboard UI for token creators
-- [ ] Automated fee crank (permissionless)
+- ✅ Automated fee crank (6-hour heartbeat)
 - [ ] Multi-sig treasury support
 - [ ] Governance token for protocol decisions
 
