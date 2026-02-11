@@ -510,17 +510,44 @@ export async function updateTokenFeeConfigStatus(
     .update({ fee_config_status: status })
     .eq('mint', tokenMint);
   
-  if (error) throw new Error(`Failed to update fee config status: ${error.message}`);
+  // Silently ignore if column doesn't exist yet
+  if (error && !error.message?.includes('fee_config_status')) {
+    throw new Error(`Failed to update fee config status: ${error.message}`);
+  }
 }
 
 export async function getTokensForFeeClaiming(): Promise<TokenRecord[]> {
   const db = getSupabase();
-  // Get tokens that are configured or pending (not failed/not_eligible)
-  const { data, error } = await db
-    .from('tokens')
-    .select('*')
-    .not('tx_signature', 'like', 'mock_%')
-    .or('fee_config_status.is.null,fee_config_status.eq.configured,fee_config_status.eq.pending');
+  
+  // First try with fee_config_status column
+  let data, error;
+  try {
+    const result = await db
+      .from('tokens')
+      .select('*')
+      .not('tx_signature', 'like', 'mock_%')
+      .or('fee_config_status.is.null,fee_config_status.eq.configured,fee_config_status.eq.pending');
+    data = result.data;
+    error = result.error;
+  } catch (e) {
+    // Column might not exist - fall back to simple query
+    const result = await db
+      .from('tokens')
+      .select('*')
+      .not('tx_signature', 'like', 'mock_%');
+    data = result.data;
+    error = result.error;
+  }
+  
+  // If column doesn't exist, just get all non-mock tokens
+  if (error?.message?.includes('fee_config_status')) {
+    const result = await db
+      .from('tokens')
+      .select('*')
+      .not('tx_signature', 'like', 'mock_%');
+    if (result.error) throw new Error(`Failed to get tokens: ${result.error.message}`);
+    return (result.data || []) as TokenRecord[];
+  }
   
   if (error) throw new Error(`Failed to get tokens for fee claiming: ${error.message}`);
   return (data || []) as TokenRecord[];
