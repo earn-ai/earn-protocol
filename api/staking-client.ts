@@ -10,7 +10,7 @@ import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, createAssociatedTokenA
 import * as borsh from 'borsh';
 
 // Program ID (deployed on devnet)
-export const STAKING_PROGRAM_ID = new PublicKey('E7JsJuQWGaEYC34AkEv8dcmkKUxR1KqUnje17mNCuTiY');
+export const STAKING_PROGRAM_ID = new PublicKey('6jWG6SLtbXhvwsEMcVc3UmbWHyEHgZkY6NpHn8AmCqYj');
 
 // PDA Seeds
 const GLOBAL_CONFIG_SEED = 'global-config';
