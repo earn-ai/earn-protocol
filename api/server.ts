@@ -666,7 +666,7 @@ try {
 // ============ ROUTES ============
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   if (!earnWallet) {
     return res.status(503).json({
       status: 'error',
@@ -674,12 +674,26 @@ app.get('/health', (req, res) => {
       network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
     });
   }
+  
+  // Debug: check actual slot to verify network
+  let debugSlot = 0;
+  try {
+    debugSlot = await connection.getSlot();
+  } catch (e) {
+    // ignore
+  }
+  
   res.json({ 
     status: 'ok', 
     wallet: earnWallet.publicKey.toString(),
     network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
     tokensLaunched: tokenRegistry.size,
     ipfsEnabled: IPFS_ENABLED,
+    _debug: {
+      rpcUrlSet: !!process.env.RPC_URL,
+      rpcUrlPreview: RPC_URL.substring(0, 40) + '...',
+      slot: debugSlot, // mainnet = 300B+, devnet = under 1M
+    }
   });
 });
 
