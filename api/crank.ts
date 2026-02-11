@@ -121,7 +121,7 @@ export async function runDistributionCrank(): Promise<{
   console.log(`💼 Earn Wallet: ${earnWallet.publicKey.toString()}`);
   
   // Get Earn's creator vault balance
-  const [creatorVault] = creatorVaultPda(earnWallet.publicKey);
+  const creatorVault = creatorVaultPda(earnWallet.publicKey);
   console.log(`🏦 Creator Vault: ${creatorVault.toString()}`);
   
   let vaultBalance = 0;
