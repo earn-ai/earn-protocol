@@ -3290,8 +3290,9 @@ app.post('/admin/buyback', async (req, res) => {
       return res.status(400).json({ success: false, error: 'tokenMint required' });
     }
     
-    // Convert slippageBps to decimal (e.g., 5000 = 50% = 0.5)
-    const slippage = slippageBps ? slippageBps / 10000 : 0.15;
+    // SDK formula: solAmount * (1 + slippage/100)
+    // slippageBps 5000 = 50% → slippage = 50
+    const slippage = slippageBps ? slippageBps / 100 : 15; // default 15%
     
     // Get token info
     const token = await supabase.getToken(tokenMint);
