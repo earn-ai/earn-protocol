@@ -676,21 +676,24 @@ app.get('/health', async (req, res) => {
   }
   
   // Get token count from Supabase
-  let tokensLaunched = tokenRegistry.size; // fallback to in-memory
+  let tokensLaunched = 0;
   if (USE_SUPABASE) {
     try {
       const tokens = await supabase.getAllTokens();
-      tokensLaunched = tokens.length;
+      tokensLaunched = tokens?.length || 0;
     } catch (e) {
-      // fallback to registry size
+      console.error('Health check - Supabase error:', e);
+      tokensLaunched = tokenRegistry.size; // fallback to in-memory
     }
+  } else {
+    tokensLaunched = tokenRegistry.size;
   }
   
   res.json({ 
     status: 'ok', 
     wallet: earnWallet.publicKey.toString(),
     network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
-    tokensLaunched,
+    tokensLaunched: tokensLaunched,
     ipfsEnabled: IPFS_ENABLED,
   });
 });
