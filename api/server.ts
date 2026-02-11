@@ -694,8 +694,7 @@ app.get('/health', async (req, res) => {
   let tokensLaunched = 0;
   if (USE_SUPABASE) {
     try {
-      const tokens = await supabase.getAllTokens();
-      tokensLaunched = tokens?.length || 0;
+      tokensLaunched = await supabase.getTokenCount();
     } catch (e) {
       console.error('Health check - Supabase error:', e);
       tokensLaunched = tokenRegistry.size; // fallback to in-memory
