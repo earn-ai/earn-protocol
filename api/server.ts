@@ -3815,6 +3815,421 @@ app.post('/api/rewards/crank', async (req, res) => {
 
 // ============ END OFF-CHAIN STAKING ============
 
+// ============ FEE CLAIMING SYSTEM ============
+
+// GET /api/fees/pending-all - Check pending fees across all tokens
+app.get('/api/fees/pending-all', async (req, res) => {
+  try {
+    // Import Pump SDK functions
+    const { OnlinePumpSdk, bondingCurvePda, feeSharingConfigPda } = await import('@pump-fun/pump-sdk');
+    const onlineSdk = new OnlinePumpSdk(connection);
+    
+    // Get all tokens we've launched (not mock/test)
+    const tokens = await supabase.getTokensForFeeClaiming();
+    
+    const tokenResults: Array<{
+      mint: string;
+      symbol: string;
+      claimable_sol: number;
+      fee_config_exists: boolean;
+      phase: string;
+    }> = [];
+    
+    let totalClaimable = 0;
+    
+    for (const token of tokens) {
+      try {
+        const mintPubkey = new PublicKey(token.mint);
+        
+        // Check fee sharing config
+        const sharingConfigAddress = feeSharingConfigPda(mintPubkey);
+        const configAddr = Array.isArray(sharingConfigAddress) ? sharingConfigAddress[0] : sharingConfigAddress;
+        const configInfo = await connection.getAccountInfo(configAddr);
+        
+        // Check bonding curve state
+        const bcPda = bondingCurvePda(mintPubkey);
+        const bondingCurve = Array.isArray(bcPda) ? bcPda[0] : bcPda;
+        const bcInfo = await connection.getAccountInfo(bondingCurve);
+        
+        let phase = 'unknown';
+        let claimable = 0;
+        
+        if (bcInfo && bcInfo.owner.equals(new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))) {
+          phase = 'bonding_curve';
+        } else {
+          phase = 'graduated'; // AMM
+        }
+        
+        // Try to get claimable fees using OnlinePumpSdk
+        try {
+          const claimIxs = await onlineSdk.collectCoinCreatorFeeInstructions(earnWallet.publicKey);
+          // If we got instructions, there are fees to claim (we can't easily separate by token here)
+          if (claimIxs.length > 0) {
+            // Check creator vault balance for this creator
+            const { creatorVaultPda } = await import('@pump-fun/pump-sdk');
+            const vault = creatorVaultPda(earnWallet.publicKey);
+            const vaultAddr = Array.isArray(vault) ? vault[0] : vault;
+            const vaultInfo = await connection.getAccountInfo(vaultAddr);
+            claimable = vaultInfo ? vaultInfo.lamports / 1e9 : 0;
+          }
+        } catch (e) {
+          // Couldn't get fee info for this token
+        }
+        
+        tokenResults.push({
+          mint: token.mint,
+          symbol: token.symbol,
+          claimable_sol: claimable,
+          fee_config_exists: !!configInfo,
+          phase,
+        });
+        
+        totalClaimable += claimable;
+      } catch (e: any) {
+        // Skip tokens that error
+        tokenResults.push({
+          mint: token.mint,
+          symbol: token.symbol,
+          claimable_sol: 0,
+          fee_config_exists: false,
+          phase: 'error',
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      tokens: tokenResults,
+      total_claimable_sol: totalClaimable,
+      tokens_count: tokens.length,
+      note: 'Use POST /api/fees/claim-all to claim all pending fees',
+    });
+    
+  } catch (e: any) {
+    console.error('Pending fees error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/fees/claim-all - Claim fees from all tokens
+app.post('/api/fees/claim-all', async (req, res) => {
+  const MIN_WALLET_BALANCE = 0.01 * 1e9; // 0.01 SOL minimum to keep for gas
+  
+  try {
+    // Get wallet balance
+    let walletBalance = await connection.getBalance(earnWallet.publicKey);
+    const balanceBefore = walletBalance;
+    
+    if (walletBalance < MIN_WALLET_BALANCE) {
+      return res.status(400).json({
+        success: false,
+        error: 'Wallet balance too low for claiming',
+        balance: walletBalance / 1e9,
+        minimum: MIN_WALLET_BALANCE / 1e9,
+      });
+    }
+    
+    // Get tokens to claim from
+    const tokens = await supabase.getTokensForFeeClaiming();
+    
+    const results: Array<{
+      mint: string;
+      symbol: string;
+      status: 'claimed' | 'skipped' | 'error' | 'no_fees' | 'config_setup';
+      amount_sol?: number;
+      tx_signature?: string;
+      error?: string;
+    }> = [];
+    
+    let totalClaimed = 0;
+    
+    // Import Pump SDK
+    const { OnlinePumpSdk, feeSharingConfigPda, bondingCurvePda, PumpSdk } = await import('@pump-fun/pump-sdk');
+    const onlineSdk = new OnlinePumpSdk(connection);
+    const pumpSdk = new PumpSdk();
+    
+    // Instead of per-token claiming, use the batch claim which is more efficient
+    // First, try to claim all fees at once using OnlinePumpSdk
+    try {
+      const claimIxs = await onlineSdk.collectCoinCreatorFeeInstructions(earnWallet.publicKey);
+      
+      if (claimIxs.length > 0) {
+        const tx = new Transaction();
+        tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }));
+        tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
+        
+        for (const ix of claimIxs) {
+          tx.add(ix);
+        }
+        
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = earnWallet.publicKey;
+        tx.sign(earnWallet);
+        
+        const signature = await connection.sendRawTransaction(tx.serialize(), {
+          skipPreflight: true,
+          maxRetries: 3,
+        });
+        
+        await connection.confirmTransaction({
+          signature,
+          blockhash,
+          lastValidBlockHeight,
+        }, 'confirmed');
+        
+        // Check how much was claimed
+        const balanceAfter = await connection.getBalance(earnWallet.publicKey);
+        totalClaimed = (balanceAfter - balanceBefore) / 1e9;
+        
+        // Log the claim to Supabase (as a batch claim)
+        if (totalClaimed > 0) {
+          await supabase.insertFeeClaim({
+            token_mint: 'BATCH_CLAIM',
+            amount_sol: totalClaimed,
+            tx_signature: signature,
+            wallet_balance_before: balanceBefore / 1e9,
+            wallet_balance_after: balanceAfter / 1e9,
+          });
+        }
+        
+        results.push({
+          mint: 'BATCH_CLAIM',
+          symbol: 'ALL',
+          status: 'claimed',
+          amount_sol: totalClaimed,
+          tx_signature: signature,
+        });
+      } else {
+        results.push({
+          mint: 'BATCH_CLAIM',
+          symbol: 'ALL',
+          status: 'no_fees',
+        });
+      }
+    } catch (batchError: any) {
+      console.error('Batch claim failed, falling back to per-token:', batchError.message);
+      
+      // Fallback: try claiming per-token sequentially
+      for (const token of tokens) {
+        // Check if we still have enough SOL for gas
+        walletBalance = await connection.getBalance(earnWallet.publicKey);
+        if (walletBalance < MIN_WALLET_BALANCE) {
+          results.push({
+            mint: token.mint,
+            symbol: token.symbol,
+            status: 'skipped',
+            error: 'Wallet balance too low',
+          });
+          break;
+        }
+        
+        try {
+          const mintPubkey = new PublicKey(token.mint);
+          
+          // Check fee sharing config
+          const sharingConfigAddress = feeSharingConfigPda(mintPubkey);
+          const configAddr = Array.isArray(sharingConfigAddress) ? sharingConfigAddress[0] : sharingConfigAddress;
+          const configInfo = await connection.getAccountInfo(configAddr);
+          
+          if (!configInfo) {
+            // Need to set up fee sharing config first
+            try {
+              const bcPda = bondingCurvePda(mintPubkey);
+              const poolAddress = Array.isArray(bcPda) ? bcPda[0] : bcPda;
+              
+              const createConfigIx = await pumpSdk.createFeeSharingConfig({
+                creator: earnWallet.publicKey,
+                mint: mintPubkey,
+                pool: poolAddress,
+              });
+              
+              // Also update fee shares
+              const updateSharesIx = await pumpSdk.updateFeeShares({
+                creator: earnWallet.publicKey,
+                mint: mintPubkey,
+                shares: [
+                  { wallet: earnWallet.publicKey, shareBps: 10000 }, // 100% to Earn wallet
+                ],
+              });
+              
+              const tx = new Transaction();
+              tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
+              tx.add(createConfigIx);
+              tx.add(updateSharesIx);
+              
+              const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+              tx.recentBlockhash = blockhash;
+              tx.feePayer = earnWallet.publicKey;
+              tx.sign(earnWallet);
+              
+              const sig = await connection.sendRawTransaction(tx.serialize(), {
+                skipPreflight: false,
+                maxRetries: 3,
+              });
+              
+              await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+              
+              // Update status
+              await supabase.updateTokenFeeConfigStatus(token.mint, 'configured');
+              
+              results.push({
+                mint: token.mint,
+                symbol: token.symbol,
+                status: 'config_setup',
+                tx_signature: sig,
+              });
+              
+            } catch (setupError: any) {
+              // Setup failed - mark as not eligible or failed
+              const isNotCreator = setupError.message?.includes('not the creator') || 
+                                   setupError.message?.includes('unauthorized');
+              await supabase.updateTokenFeeConfigStatus(
+                token.mint, 
+                isNotCreator ? 'not_eligible' : 'failed'
+              );
+              
+              results.push({
+                mint: token.mint,
+                symbol: token.symbol,
+                status: 'error',
+                error: setupError.message,
+              });
+            }
+            continue;
+          }
+          
+          // Config exists, try to claim
+          const sharingConfig = pumpSdk.decodeFeeSharingConfig(configInfo);
+          
+          const distributeIx = await pumpSdk.distributeCreatorFees({
+            mint: mintPubkey,
+            sharingConfig,
+            sharingConfigAddress: configAddr,
+          });
+          
+          const balanceBeforeToken = await connection.getBalance(earnWallet.publicKey);
+          
+          const tx = new Transaction();
+          tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
+          tx.add(distributeIx);
+          
+          const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+          tx.recentBlockhash = blockhash;
+          tx.feePayer = earnWallet.publicKey;
+          tx.sign(earnWallet);
+          
+          const signature = await connection.sendRawTransaction(tx.serialize(), {
+            skipPreflight: false,
+            maxRetries: 3,
+          });
+          
+          await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
+          
+          const balanceAfterToken = await connection.getBalance(earnWallet.publicKey);
+          const claimedAmount = (balanceAfterToken - balanceBeforeToken) / 1e9;
+          
+          if (claimedAmount > 0) {
+            // Log the claim
+            await supabase.insertFeeClaim({
+              token_mint: token.mint,
+              amount_sol: claimedAmount,
+              tx_signature: signature,
+              wallet_balance_before: balanceBeforeToken / 1e9,
+              wallet_balance_after: balanceAfterToken / 1e9,
+            });
+            
+            totalClaimed += claimedAmount;
+          }
+          
+          results.push({
+            mint: token.mint,
+            symbol: token.symbol,
+            status: claimedAmount > 0 ? 'claimed' : 'no_fees',
+            amount_sol: claimedAmount,
+            tx_signature: signature,
+          });
+          
+          // Update status to configured
+          await supabase.updateTokenFeeConfigStatus(token.mint, 'configured');
+          
+        } catch (tokenError: any) {
+          results.push({
+            mint: token.mint,
+            symbol: token.symbol,
+            status: 'error',
+            error: tokenError.message,
+          });
+        }
+        
+        // Small delay between tokens to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    const balanceAfter = await connection.getBalance(earnWallet.publicKey);
+    
+    res.json({
+      success: true,
+      total_claimed_sol: totalClaimed,
+      wallet_balance_before: balanceBefore / 1e9,
+      wallet_balance_after: balanceAfter / 1e9,
+      tokens_processed: results.length,
+      results,
+      message: `Claimed ${totalClaimed.toFixed(4)} SOL in fees`,
+    });
+    
+  } catch (e: any) {
+    console.error('Claim all fees error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /api/fees/claim-history - Get claim history from fee_claims table
+app.get('/api/fees/claim-history', async (req, res) => {
+  try {
+    const { limit, token } = req.query;
+    
+    const claims = await supabase.getFeeClaims({
+      tokenMint: token as string,
+      limit: limit ? parseInt(limit as string) : 100,
+    });
+    
+    const stats = await supabase.getFeeClaimStats();
+    
+    res.json({
+      success: true,
+      total_claimed_all_time: stats.totalClaimedSol,
+      total_claims: stats.totalClaims,
+      claims_by_token: stats.claimsByToken,
+      recent_claims: claims.map(c => ({
+        token_mint: c.token_mint,
+        amount_sol: c.amount_sol,
+        tx_signature: c.tx_signature,
+        claimed_at: c.claimed_at,
+        explorer: `https://solscan.io/tx/${c.tx_signature}`,
+      })),
+    });
+    
+  } catch (e: any) {
+    // Handle case where table doesn't exist yet
+    if (e.message?.includes('fee_claims')) {
+      return res.json({
+        success: true,
+        total_claimed_all_time: 0,
+        total_claims: 0,
+        claims_by_token: {},
+        recent_claims: [],
+        note: 'No claims yet. Run POST /api/fees/claim-all to start claiming.',
+      });
+    }
+    console.error('Claim history error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ============ END FEE CLAIMING SYSTEM ============
+
 // 405 handlers for POST-only routes
 const postOnlyRoutes = ['/launch', '/register', '/stake/create-pool', '/stake/tx/stake', '/stake/tx/unstake', '/stake/tx/claim'];
 postOnlyRoutes.forEach(route => {

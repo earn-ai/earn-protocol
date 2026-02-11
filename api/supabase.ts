@@ -420,6 +420,112 @@ export async function updatePoolLastCrank(tokenMint: string): Promise<void> {
     .eq('token_mint', tokenMint);
 }
 
+// ============ FEE CLAIMS ============
+
+export interface FeeClaim {
+  claim_id: string;
+  token_mint: string;
+  amount_sol: number;
+  tx_signature: string;
+  wallet_balance_before: number;
+  wallet_balance_after: number;
+  claimed_at: string;
+}
+
+export async function insertFeeClaim(claim: Omit<FeeClaim, 'claim_id' | 'claimed_at'>): Promise<FeeClaim> {
+  const db = getSupabase();
+  const { data, error } = await db
+    .from('fee_claims')
+    .insert(claim)
+    .select()
+    .single();
+  
+  if (error) throw new Error(`Failed to insert fee claim: ${error.message}`);
+  return data as FeeClaim;
+}
+
+export async function getFeeClaims(options: {
+  tokenMint?: string;
+  limit?: number;
+} = {}): Promise<FeeClaim[]> {
+  const db = getSupabase();
+  let query = db.from('fee_claims').select('*');
+  
+  if (options.tokenMint) {
+    query = query.eq('token_mint', options.tokenMint);
+  }
+  
+  query = query.order('claimed_at', { ascending: false });
+  
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+  
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to get fee claims: ${error.message}`);
+  return (data || []) as FeeClaim[];
+}
+
+export async function getFeeClaimStats(): Promise<{
+  totalClaimedSol: number;
+  totalClaims: number;
+  claimsByToken: Record<string, { total: number; count: number; lastClaim: string }>;
+}> {
+  const db = getSupabase();
+  const { data, error } = await db.from('fee_claims').select('*');
+  
+  if (error) throw new Error(`Failed to get fee claim stats: ${error.message}`);
+  
+  const claims = (data || []) as FeeClaim[];
+  const claimsByToken: Record<string, { total: number; count: number; lastClaim: string }> = {};
+  
+  for (const claim of claims) {
+    if (!claimsByToken[claim.token_mint]) {
+      claimsByToken[claim.token_mint] = { total: 0, count: 0, lastClaim: '' };
+    }
+    claimsByToken[claim.token_mint].total += claim.amount_sol;
+    claimsByToken[claim.token_mint].count++;
+    if (!claimsByToken[claim.token_mint].lastClaim || claim.claimed_at > claimsByToken[claim.token_mint].lastClaim) {
+      claimsByToken[claim.token_mint].lastClaim = claim.claimed_at;
+    }
+  }
+  
+  return {
+    totalClaimedSol: claims.reduce((sum, c) => sum + c.amount_sol, 0),
+    totalClaims: claims.length,
+    claimsByToken,
+  };
+}
+
+// Update token fee config status
+export type FeeConfigStatus = 'configured' | 'pending' | 'failed' | 'not_eligible';
+
+export async function updateTokenFeeConfigStatus(
+  tokenMint: string, 
+  status: FeeConfigStatus
+): Promise<void> {
+  const db = getSupabase();
+  const { error } = await db
+    .from('tokens')
+    .update({ fee_config_status: status })
+    .eq('mint', tokenMint);
+  
+  if (error) throw new Error(`Failed to update fee config status: ${error.message}`);
+}
+
+export async function getTokensForFeeClaiming(): Promise<TokenRecord[]> {
+  const db = getSupabase();
+  // Get tokens that are configured or pending (not failed/not_eligible)
+  const { data, error } = await db
+    .from('tokens')
+    .select('*')
+    .not('tx_signature', 'like', 'mock_%')
+    .or('fee_config_status.is.null,fee_config_status.eq.configured,fee_config_status.eq.pending');
+  
+  if (error) throw new Error(`Failed to get tokens for fee claiming: ${error.message}`);
+  return (data || []) as TokenRecord[];
+}
+
 // ============ SCHEMA (for reference) ============
 /*
 CREATE TABLE tokens (
