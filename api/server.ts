@@ -2944,6 +2944,218 @@ app.get('/admin/wallet', async (req, res) => {
   });
 });
 
+// Check Pump.fun creator vault fees
+app.get('/admin/fees', async (req, res) => {
+  try {
+    // Dynamic import pump-fun SDK
+    const { creatorVaultPda, GLOBAL_PDA } = await import('@pump-fun/pump-sdk');
+    
+    // Get creator vault PDA
+    const creatorVault = creatorVaultPda(earnWallet.publicKey);
+    const vaultAddress = Array.isArray(creatorVault) ? creatorVault[0] : creatorVault;
+    
+    // Check vault balance
+    let vaultBalance = 0;
+    try {
+      const vaultInfo = await connection.getAccountInfo(vaultAddress);
+      vaultBalance = vaultInfo ? vaultInfo.lamports : 0;
+    } catch (e) {
+      // Vault might not exist yet
+    }
+    
+    // Get tokens launched through Earn
+    const tokens = await supabase.getAllTokens({ limit: 100 });
+    
+    res.json({
+      success: true,
+      creatorVault: vaultAddress.toString(),
+      vaultBalance: vaultBalance / 1e9,
+      vaultBalanceLamports: vaultBalance,
+      earnWallet: earnWallet.publicKey.toString(),
+      tokensLaunched: tokens.total,
+      note: vaultBalance > 0 
+        ? 'Fees available to claim! Use POST /admin/claim-fees'
+        : 'No fees accumulated yet. Fees accrue when tokens are traded on Pump.fun.',
+    });
+  } catch (e: any) {
+    console.error('Fee check error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Claim fees from Pump.fun creator vault and distribute
+app.post('/admin/claim-fees', async (req, res) => {
+  try {
+    const { PumpSdk, creatorVaultPda } = await import('@pump-fun/pump-sdk');
+    const pumpSdk = new PumpSdk();
+    
+    // Get creator vault
+    const creatorVault = creatorVaultPda(earnWallet.publicKey);
+    const vaultAddress = Array.isArray(creatorVault) ? creatorVault[0] : creatorVault;
+    
+    // Check balance
+    const vaultInfo = await connection.getAccountInfo(vaultAddress);
+    const vaultBalance = vaultInfo ? vaultInfo.lamports : 0;
+    
+    if (vaultBalance < 1000000) { // < 0.001 SOL
+      return res.json({
+        success: true,
+        claimed: 0,
+        message: 'No fees to claim (vault empty or below minimum)',
+      });
+    }
+    
+    // Build claim transaction using Pump.fun SDK
+    const claimTx = await pumpSdk.claimCreatorFees(
+      earnWallet.publicKey,
+      vaultBalance,
+    );
+    
+    // Sign and send
+    claimTx.sign([earnWallet]);
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    claimTx.recentBlockhash = blockhash;
+    
+    const signature = await connection.sendRawTransaction(claimTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    
+    await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    }, 'confirmed');
+    
+    const claimedSol = vaultBalance / 1e9;
+    
+    res.json({
+      success: true,
+      claimed: claimedSol,
+      signature,
+      explorer: `https://solscan.io/tx/${signature}`,
+      message: `Claimed ${claimedSol.toFixed(4)} SOL in fees`,
+      nextStep: 'Use POST /admin/buyback to buy back tokens with claimed fees',
+    });
+    
+  } catch (e: any) {
+    console.error('Claim fees error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Execute buyback for a token
+app.post('/admin/buyback', async (req, res) => {
+  try {
+    const { tokenMint, solAmount } = req.body;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ success: false, error: 'tokenMint required' });
+    }
+    
+    // Get token info
+    const token = await supabase.getToken(tokenMint);
+    if (!token) {
+      return res.status(404).json({ success: false, error: 'Token not found' });
+    }
+    
+    // Check wallet balance
+    const walletBalance = await connection.getBalance(earnWallet.publicKey);
+    const buyAmount = solAmount ? solAmount * 1e9 : Math.floor(walletBalance * 0.1); // Default 10% of balance
+    
+    if (buyAmount > walletBalance - 10000000) { // Keep 0.01 SOL for fees
+      return res.status(400).json({ 
+        success: false, 
+        error: `Insufficient balance. Have ${walletBalance/1e9} SOL, need ${buyAmount/1e9} SOL + fees` 
+      });
+    }
+    
+    // Import and execute buyback
+    const { executeBuyback } = await import('./buyback');
+    const result = await executeBuyback(
+      new PublicKey(tokenMint),
+      buyAmount / 1e9,
+      token.symbol
+    );
+    
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: result.error });
+    }
+    
+    // Record buyback for staking rewards
+    // The bought tokens go to Earn wallet, can be distributed to stakers
+    
+    res.json({
+      success: true,
+      tokenMint,
+      symbol: token.symbol,
+      solSpent: result.solSpent,
+      tokensReceived: result.tokensReceived,
+      txSignature: result.txSignature,
+      explorer: `https://solscan.io/tx/${result.txSignature}`,
+      message: `Bought back ${result.tokensReceived} ${token.symbol} for ${result.solSpent} SOL`,
+      nextStep: 'Tokens are now in Earn wallet. Use POST /api/rewards/crank to distribute to stakers.',
+    });
+    
+  } catch (e: any) {
+    console.error('Buyback error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Full crank: claim fees + buyback + distribute rewards
+app.post('/admin/full-crank', async (req, res) => {
+  try {
+    const results: any = {
+      feesClaimed: 0,
+      buybacks: [],
+      rewardsDistributed: 0,
+      errors: [],
+    };
+    
+    // Step 1: Check and claim fees
+    const { creatorVaultPda } = await import('@pump-fun/pump-sdk');
+    const creatorVault = creatorVaultPda(earnWallet.publicKey);
+    const vaultAddress = Array.isArray(creatorVault) ? creatorVault[0] : creatorVault;
+    
+    const vaultInfo = await connection.getAccountInfo(vaultAddress);
+    const vaultBalance = vaultInfo ? vaultInfo.lamports : 0;
+    results.vaultBalance = vaultBalance / 1e9;
+    
+    // Step 2: Get all tokens and their staking allocation
+    const tokens = await supabase.getAllTokens({ limit: 100 });
+    results.tokensCount = tokens.total;
+    
+    // For each token with staking enabled, track for buyback
+    for (const token of tokens.tokens) {
+      const stakingCut = token.staking_cut_bps / 10000;
+      if (stakingCut > 0) {
+        results.buybacks.push({
+          mint: token.mint,
+          symbol: token.symbol,
+          stakingCut: `${stakingCut * 100}%`,
+          status: 'pending',
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      summary: results,
+      note: 'Full crank shows what would happen. Implement actual execution in production.',
+      manualSteps: [
+        '1. POST /admin/claim-fees - Claim from Pump.fun creator vault',
+        '2. POST /admin/buyback - Buy back each token',
+        '3. POST /api/rewards/crank - Distribute to stakers',
+      ],
+    });
+    
+  } catch (e: any) {
+    console.error('Full crank error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // ============ END ADMIN ============
 
 // ============ OFF-CHAIN STAKING (Token-2022 compatible) ============
