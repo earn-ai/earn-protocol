@@ -675,25 +675,23 @@ app.get('/health', async (req, res) => {
     });
   }
   
-  // Debug: check actual slot to verify network
-  let debugSlot = 0;
-  try {
-    debugSlot = await connection.getSlot();
-  } catch (e) {
-    // ignore
+  // Get token count from Supabase
+  let tokensLaunched = tokenRegistry.size; // fallback to in-memory
+  if (USE_SUPABASE) {
+    try {
+      const tokens = await supabase.getAllTokens();
+      tokensLaunched = tokens.length;
+    } catch (e) {
+      // fallback to registry size
+    }
   }
   
   res.json({ 
     status: 'ok', 
     wallet: earnWallet.publicKey.toString(),
     network: RPC_URL.includes('devnet') ? 'devnet' : 'mainnet',
-    tokensLaunched: tokenRegistry.size,
+    tokensLaunched,
     ipfsEnabled: IPFS_ENABLED,
-    _debug: {
-      rpcUrlSet: !!process.env.RPC_URL,
-      rpcUrlPreview: RPC_URL.substring(0, 40) + '...',
-      slot: debugSlot, // mainnet = 300B+, devnet = under 1M
-    }
   });
 });
 
