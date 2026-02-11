@@ -3217,64 +3217,31 @@ app.get('/api/token/:mint/status', async (req, res) => {
   }
 });
 
-// Claim fees from AMM (for graduated tokens)
-app.post('/admin/claim-amm-fees', async (req, res) => {
+// Claim ALL creator fees (from both old Pump vault AND AMM vault)
+app.post('/admin/claim-all-fees', async (req, res) => {
   try {
-    const { tokenMint } = req.body;
+    // Get balance before
+    const balanceBefore = await connection.getBalance(earnWallet.publicKey);
     
-    if (!tokenMint) {
-      return res.status(400).json({ success: false, error: 'tokenMint required' });
-    }
+    // Use the OnlinePumpSdk which handles both vaults
+    const { OnlinePumpSdk } = await import('@pump-fun/pump-sdk');
+    const onlineSdk = new OnlinePumpSdk(connection);
     
-    const mintPubkey = new PublicKey(tokenMint);
+    // Get combined claim instructions (old vault + AMM vault)
+    const claimIxs = await onlineSdk.collectCoinCreatorFeeInstructions(earnWallet.publicKey);
     
-    // Import AMM SDK
-    const { PumpAmmSdk, coinCreatorVaultAuthorityPda, coinCreatorVaultAtaPda, PUMP_AMM_PROGRAM_ID } = await import('@pump-fun/pump-swap-sdk');
-    const { NATIVE_MINT, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } = await import('@solana/spl-token');
-    
-    const pumpAmmSdk = new PumpAmmSdk(connection);
-    
-    // Get vault addresses
-    const coinCreatorVaultAuthority = coinCreatorVaultAuthorityPda(earnWallet.publicKey);
-    const coinCreatorVaultAta = getAssociatedTokenAddressSync(NATIVE_MINT, coinCreatorVaultAuthority, true, TOKEN_PROGRAM_ID);
-    const coinCreatorTokenAccount = getAssociatedTokenAddressSync(NATIVE_MINT, earnWallet.publicKey, false, TOKEN_PROGRAM_ID);
-    
-    // Check vault balance
-    const vaultAtaInfo = await connection.getAccountInfo(coinCreatorVaultAta);
-    if (!vaultAtaInfo) {
+    if (claimIxs.length === 0) {
       return res.json({
         success: true,
         claimed: 0,
-        message: 'No AMM creator vault found or empty',
-      });
-    }
-    
-    const coinCreatorTokenAccountInfo = await connection.getAccountInfo(coinCreatorTokenAccount);
-    
-    // Build collect fee instructions
-    const collectIxs = await pumpAmmSdk.collectCoinCreatorFee({
-      coinCreator: earnWallet.publicKey,
-      quoteMint: NATIVE_MINT,
-      quoteTokenProgram: TOKEN_PROGRAM_ID,
-      coinCreatorVaultAuthority,
-      coinCreatorVaultAta,
-      coinCreatorTokenAccount,
-      coinCreatorVaultAtaAccountInfo: vaultAtaInfo,
-      coinCreatorTokenAccountInfo,
-    });
-    
-    if (collectIxs.length === 0) {
-      return res.json({
-        success: true,
-        claimed: 0,
-        message: 'No fees to collect',
+        message: 'No fees to collect from either vault',
       });
     }
     
     const tx = new Transaction();
-    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 }));
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }));
     tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
-    for (const ix of collectIxs) {
+    for (const ix of claimIxs) {
       tx.add(ix);
     }
     
@@ -3294,19 +3261,22 @@ app.post('/admin/claim-amm-fees', async (req, res) => {
       lastValidBlockHeight,
     }, 'confirmed');
     
-    // Check how much was claimed (balance diff)
-    const newBalance = await connection.getBalance(earnWallet.publicKey);
+    // Check how much was claimed
+    const balanceAfter = await connection.getBalance(earnWallet.publicKey);
+    const claimed = (balanceAfter - balanceBefore) / 1e9;
     
     res.json({
       success: true,
+      claimed,
       signature,
       explorer: `https://solscan.io/tx/${signature}`,
-      message: 'AMM creator fees collected successfully',
-      newWalletBalance: newBalance / 1e9,
+      balanceBefore: balanceBefore / 1e9,
+      balanceAfter: balanceAfter / 1e9,
+      message: `Claimed ${claimed.toFixed(4)} SOL in creator fees`,
     });
     
   } catch (e: any) {
-    console.error('AMM claim fees error:', e);
+    console.error('Claim all fees error:', e);
     res.status(500).json({ success: false, error: e.message });
   }
 });
