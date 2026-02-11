@@ -281,18 +281,8 @@ export async function recordStake(
   
   if (error) throw new Error(`Failed to record stake: ${error.message}`);
   
-  // Update pool totals
-  await db.rpc('increment_pool_stake', { 
-    p_token_mint: tokenMint, 
-    p_amount: amount 
-  }).catch(() => {
-    // Fallback if RPC doesn't exist - manual update
-    db.from('staking_pools')
-      .update({ 
-        total_staked: db.rpc('add', { a: 'total_staked', b: amount }),
-      })
-      .eq('token_mint', tokenMint);
-  });
+  // Update pool totals using the dedicated function
+  await updatePoolTotals(tokenMint);
   
   return stake as Stake;
 }
