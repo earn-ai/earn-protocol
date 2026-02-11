@@ -576,26 +576,41 @@ console.log(\\\`Staking pool: \\\${pool}\\\`);
 
 ## Network
 
-Currently on **Solana Devnet**. Mainnet coming soon.
+🚀 **Live on Solana Mainnet.**
+
+No API key required. Anyone can launch tokens.
+
+## Rate Limits
+
+- 10 requests per minute per IP
+- Rate limit headers: \`X-RateLimit-Limit\`, \`X-RateLimit-Remaining\`
+
+## Error Response Format
+
+\`\`\`json
+{
+  "success": false,
+  "error": "Missing required field: name"
+}
+\`\`\`
+
+## How Fees Work
+
+When someone trades a token launched through Earn:
+1. A fee is collected on each trade (via Pump.fun bonding curve)
+2. Fee is automatically split according to the template
+3. Creator revenue accumulates in the staking pool vault
+4. Stakers earn proportional to their stake
+5. Earn Protocol takes its cut for infrastructure
+
+All on-chain. Trustless. Automatic.
 
 ## 🔑 For Enhanced Data (Optional)
 
 Earn uses **DexScreener** for prices (free, no key needed).
 
-For richer token metadata, balances, and transaction history, agents can self-provision a **Helius** API key:
-
-\`\`\`bash
-# Install Helius CLI
-npm install -g helius-cli
-
-# Login with your wallet to get a key
-helius login
-
-# Or get a key at: https://dev.helius.xyz
-\`\`\`
-
-Then set \`HELIUS_API_KEY\` in your environment. This unlocks:
-- Token metadata via DAS (Digital Asset Standard)
+For richer token metadata, set \`HELIUS_API_KEY\` environment variable.
+Get a free key at: https://dev.helius.xyz
 - Wallet balances
 - Transaction history
 - Enhanced RPC
@@ -1661,7 +1676,9 @@ app.get('/explore', async (req, res) => {
 // Explore API endpoint
 app.get('/api/explore', async (req, res) => {
   try {
-    const { page = '1', limit = '20', tokenomics, search, sort = 'newest', includePrice = 'true' } = req.query;
+    const { page = '1', limit = '20', tokenomics, template, search, sort = 'newest', includePrice = 'true' } = req.query;
+    // Support both 'template' and 'tokenomics' as query params (template is alias)
+    const tokenomicsFilter = (template || tokenomics) as string | undefined;
     const pageNum = parseInt(page as string);
     const limitNum = Math.min(parseInt(limit as string), 100);
     
@@ -1669,7 +1686,7 @@ app.get('/api/explore', async (req, res) => {
     let total: number;
     
     if (USE_SUPABASE) {
-      const result = await supabase.getAllTokens({ page: pageNum, limit: limitNum, tokenomics: tokenomics as string, search: search as string, sort: sort as 'newest' | 'oldest' });
+      const result = await supabase.getAllTokens({ page: pageNum, limit: limitNum, tokenomics: tokenomicsFilter, search: search as string, sort: sort as 'newest' | 'oldest' });
       tokens = result.tokens;
       total = result.total;
     } else {
@@ -2928,6 +2945,18 @@ app.get('/admin/wallet', async (req, res) => {
 });
 
 // ============ END ADMIN ============
+
+// 405 handlers for POST-only routes
+const postOnlyRoutes = ['/launch', '/register', '/stake/create-pool', '/stake/tx/stake', '/stake/tx/unstake', '/stake/tx/claim'];
+postOnlyRoutes.forEach(route => {
+  app.get(route, (req, res) => {
+    res.status(405).json({
+      success: false,
+      error: 'Method Not Allowed. Use POST.',
+      docs: 'https://api.earn.supply/skill.md',
+    });
+  });
+});
 
 // 404 handler
 app.use((req, res) => {

@@ -87,6 +87,9 @@ export async function getAllTokens(options: {
     .from('tokens')
     .select('*', { count: 'exact' });
   
+  // Exclude mock/devnet test tokens from production
+  query = query.not('tx_signature', 'like', 'mock_%');
+  
   // Filters
   if (tokenomics) {
     query = query.eq('tokenomics', tokenomics);
@@ -141,30 +144,34 @@ export async function getStats(): Promise<{
 }> {
   const db = getSupabase();
   
-  // Total launches
+  // Total launches (exclude mock/devnet test tokens)
   const { count: totalLaunches } = await db
     .from('tokens')
-    .select('*', { count: 'exact', head: true });
+    .select('*', { count: 'exact', head: true })
+    .not('tx_signature', 'like', 'mock_%');
   
-  // Unique agents
+  // Unique agents (exclude mock tokens)
   const { data: agentData } = await db
     .from('tokens')
-    .select('agent_wallet');
+    .select('agent_wallet')
+    .not('tx_signature', 'like', 'mock_%');
   const uniqueAgents = new Set(agentData?.map(t => t.agent_wallet) || []);
   
-  // By tokenomics
+  // By tokenomics (exclude mock tokens)
   const { data: tokenomicsData } = await db
     .from('tokens')
-    .select('tokenomics');
+    .select('tokenomics')
+    .not('tx_signature', 'like', 'mock_%');
   const launchesByTokenomics: Record<string, number> = {};
   tokenomicsData?.forEach(t => {
     launchesByTokenomics[t.tokenomics] = (launchesByTokenomics[t.tokenomics] || 0) + 1;
   });
   
-  // Last launch
+  // Last launch (exclude mock tokens)
   const { data: lastData } = await db
     .from('tokens')
     .select('created_at')
+    .not('tx_signature', 'like', 'mock_%')
     .order('created_at', { ascending: false })
     .limit(1)
     .single();
