@@ -694,6 +694,9 @@ app.get('/debug', (req, res) => {
     priceApiAvailable: tokenData.isPriceApiAvailable(),
     isServerless: IS_SERVERLESS,
     nodeEnv: process.env.NODE_ENV,
+    rpcUrlSet: !!process.env.RPC_URL,
+    rpcNetwork: RPC_URL.includes('devnet') ? 'devnet' : RPC_URL.includes('mainnet') ? 'mainnet' : 'unknown',
+    rpcHost: RPC_URL.split('/')[2] || 'unknown', // shows domain without key
   });
 });
 
