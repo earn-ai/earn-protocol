@@ -2655,7 +2655,7 @@ app.post('/stake/create-pool', async (req, res) => {
       poolAddress: poolPDA.toString(),
       mint,
       txSignature: signature,
-      explorer: `https://solscan.io/tx/${signature}?cluster=devnet`,
+      explorer: `https://solscan.io/tx/${signature}${RPC_URL.includes('devnet') ? '?cluster=devnet' : ''}`,
     });
   } catch (e: any) {
     console.error('Create pool failed:', e);
