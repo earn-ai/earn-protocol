@@ -2986,18 +2986,41 @@ app.get('/admin/fees', async (req, res) => {
 // Claim fees from Pump.fun creator vault and distribute
 app.post('/admin/claim-fees', async (req, res) => {
   try {
-    const { PumpSdk, creatorVaultPda } = await import('@pump-fun/pump-sdk');
+    const { tokenMint } = req.body;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'tokenMint required - specify which token to claim fees for' 
+      });
+    }
+    
+    const { PumpSdk, creatorVaultPda, feeSharingConfigPda } = await import('@pump-fun/pump-sdk');
     const pumpSdk = new PumpSdk();
+    const mintPubkey = new PublicKey(tokenMint);
     
-    // Get creator vault
-    const creatorVault = creatorVaultPda(earnWallet.publicKey);
+    // Check if fee sharing config exists
+    const sharingConfigAddress = feeSharingConfigPda(mintPubkey);
+    const configAddr = Array.isArray(sharingConfigAddress) ? sharingConfigAddress[0] : sharingConfigAddress;
+    const configInfo = await connection.getAccountInfo(configAddr);
+    
+    if (!configInfo) {
+      // Need to create fee sharing config first
+      return res.json({
+        success: false,
+        error: 'Fee sharing config not set up for this token',
+        hint: 'Use POST /admin/setup-fee-sharing first to enable fee claiming',
+        tokenMint,
+      });
+    }
+    
+    // Get creator vault balance
+    const creatorVault = creatorVaultPda(configAddr);
     const vaultAddress = Array.isArray(creatorVault) ? creatorVault[0] : creatorVault;
-    
-    // Check balance
     const vaultInfo = await connection.getAccountInfo(vaultAddress);
     const vaultBalance = vaultInfo ? vaultInfo.lamports : 0;
     
-    if (vaultBalance < 1000000) { // < 0.001 SOL
+    if (vaultBalance < 1000000) {
       return res.json({
         success: true,
         claimed: 0,
@@ -3005,18 +3028,26 @@ app.post('/admin/claim-fees', async (req, res) => {
       });
     }
     
-    // Build claim transaction using Pump.fun SDK
-    const claimTx = await pumpSdk.claimCreatorFees(
-      earnWallet.publicKey,
-      vaultBalance,
-    );
+    // Decode sharing config
+    const sharingConfig = pumpSdk.decodeFeeSharingConfig(configInfo);
     
-    // Sign and send
-    claimTx.sign([earnWallet]);
+    // Build distribute fees instruction
+    const distributeIx = await pumpSdk.distributeCreatorFees({
+      mint: mintPubkey,
+      sharingConfig,
+      sharingConfigAddress: configAddr,
+    });
+    
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
+    tx.add(distributeIx);
+    
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    claimTx.recentBlockhash = blockhash;
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = earnWallet.publicKey;
+    tx.sign(earnWallet);
     
-    const signature = await connection.sendRawTransaction(claimTx.serialize(), {
+    const signature = await connection.sendRawTransaction(tx.serialize(), {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
     });
@@ -3027,19 +3058,87 @@ app.post('/admin/claim-fees', async (req, res) => {
       lastValidBlockHeight,
     }, 'confirmed');
     
-    const claimedSol = vaultBalance / 1e9;
-    
     res.json({
       success: true,
-      claimed: claimedSol,
+      claimed: vaultBalance / 1e9,
       signature,
       explorer: `https://solscan.io/tx/${signature}`,
-      message: `Claimed ${claimedSol.toFixed(4)} SOL in fees`,
-      nextStep: 'Use POST /admin/buyback to buy back tokens with claimed fees',
+      message: `Distributed ${(vaultBalance / 1e9).toFixed(4)} SOL in fees`,
     });
     
   } catch (e: any) {
     console.error('Claim fees error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Set up Pump.fun fee sharing config for a token
+app.post('/admin/setup-fee-sharing', async (req, res) => {
+  try {
+    const { tokenMint } = req.body;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ success: false, error: 'tokenMint required' });
+    }
+    
+    const { PumpSdk, feeSharingConfigPda, bondingCurvePda } = await import('@pump-fun/pump-sdk');
+    const pumpSdk = new PumpSdk();
+    const mintPubkey = new PublicKey(tokenMint);
+    
+    // Check if config already exists
+    const sharingConfigAddress = feeSharingConfigPda(mintPubkey);
+    const configAddr = Array.isArray(sharingConfigAddress) ? sharingConfigAddress[0] : sharingConfigAddress;
+    const existingConfig = await connection.getAccountInfo(configAddr);
+    
+    if (existingConfig) {
+      return res.json({
+        success: true,
+        message: 'Fee sharing config already exists',
+        configAddress: configAddr.toString(),
+      });
+    }
+    
+    // Get bonding curve (pool) address
+    const bcPda = bondingCurvePda(mintPubkey);
+    const poolAddress = Array.isArray(bcPda) ? bcPda[0] : bcPda;
+    
+    // Create fee sharing config
+    const createConfigIx = await pumpSdk.createFeeSharingConfig({
+      creator: earnWallet.publicKey,
+      mint: mintPubkey,
+      pool: poolAddress,
+    });
+    
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 }));
+    tx.add(createConfigIx);
+    
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = earnWallet.publicKey;
+    tx.sign(earnWallet);
+    
+    const signature = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    
+    await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    }, 'confirmed');
+    
+    res.json({
+      success: true,
+      configAddress: configAddr.toString(),
+      signature,
+      explorer: `https://solscan.io/tx/${signature}`,
+      message: 'Fee sharing config created. Now use POST /admin/claim-fees to distribute.',
+    });
+    
+  } catch (e: any) {
+    console.error('Setup fee sharing error:', e);
     res.status(500).json({ success: false, error: e.message });
   }
 });
