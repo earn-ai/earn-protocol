@@ -3061,39 +3061,89 @@ app.post('/admin/buyback', async (req, res) => {
     
     // Check wallet balance
     const walletBalance = await connection.getBalance(earnWallet.publicKey);
-    const buyAmount = solAmount ? solAmount * 1e9 : Math.floor(walletBalance * 0.1); // Default 10% of balance
+    const buyAmountLamports = solAmount ? Math.floor(solAmount * 1e9) : Math.floor(walletBalance * 0.1);
     
-    if (buyAmount > walletBalance - 10000000) { // Keep 0.01 SOL for fees
+    if (buyAmountLamports > walletBalance - 10000000) {
       return res.status(400).json({ 
         success: false, 
-        error: `Insufficient balance. Have ${walletBalance/1e9} SOL, need ${buyAmount/1e9} SOL + fees` 
+        error: `Insufficient balance. Have ${walletBalance/1e9} SOL, need ${buyAmountLamports/1e9} SOL + fees` 
       });
     }
     
-    // Import and execute buyback
-    const { executeBuyback } = await import('./buyback');
-    const result = await executeBuyback(
-      new PublicKey(tokenMint),
-      buyAmount / 1e9,
-      token.symbol
+    // Use Pump SDK to buy tokens
+    const { PumpSdk, bondingCurvePda, GLOBAL_PDA } = await import('@pump-fun/pump-sdk');
+    const pumpSdk = new PumpSdk();
+    const BN = (await import('bn.js')).default;
+    
+    const mintPubkey = new PublicKey(tokenMint);
+    
+    // Get bonding curve
+    const bcPda = bondingCurvePda(mintPubkey);
+    const bondingCurve = Array.isArray(bcPda) ? bcPda[0] : bcPda;
+    
+    // Get global and bonding curve info
+    const globalInfo = await connection.getAccountInfo(GLOBAL_PDA);
+    if (!globalInfo) {
+      return res.status(500).json({ success: false, error: 'Pump.fun global account not found' });
+    }
+    const global = pumpSdk.decodeGlobal(globalInfo);
+    
+    const bcInfo = await connection.getAccountInfo(bondingCurve);
+    if (!bcInfo) {
+      return res.status(500).json({ success: false, error: 'Bonding curve not found - token may have graduated to Raydium' });
+    }
+    const bc = pumpSdk.decodeBondingCurve(bcInfo);
+    
+    // Calculate tokens to receive
+    const solAmountBN = new BN(buyAmountLamports);
+    const buyResult = pumpSdk.calculateBuyTokensResult(solAmountBN, bc, global);
+    
+    // Build buy transaction
+    const buyTx = await pumpSdk.buy(
+      earnWallet.publicKey,
+      mintPubkey,
+      solAmountBN,
+      buyResult.tokenAmount,
+      undefined, // slippage handled by SDK
+      earnWallet.publicKey
     );
     
-    if (!result.success) {
-      return res.status(500).json({ success: false, error: result.error });
-    }
+    // Add compute budget for Token-2022
+    buyTx.instructions.unshift(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 })
+    );
     
-    // Record buyback for staking rewards
-    // The bought tokens go to Earn wallet, can be distributed to stakers
+    // Sign and send
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    buyTx.recentBlockhash = blockhash;
+    buyTx.feePayer = earnWallet.publicKey;
+    buyTx.sign(earnWallet);
+    
+    const signature = await connection.sendRawTransaction(buyTx.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+    });
+    
+    await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    }, 'confirmed');
+    
+    const tokensReceived = buyResult.tokenAmount.toString();
+    const solSpent = buyAmountLamports / 1e9;
     
     res.json({
       success: true,
       tokenMint,
       symbol: token.symbol,
-      solSpent: result.solSpent,
-      tokensReceived: result.tokensReceived,
-      txSignature: result.txSignature,
-      explorer: `https://solscan.io/tx/${result.txSignature}`,
-      message: `Bought back ${result.tokensReceived} ${token.symbol} for ${result.solSpent} SOL`,
+      solSpent,
+      tokensReceived,
+      tokensReceivedFormatted: (Number(tokensReceived) / 1e6).toFixed(2),
+      txSignature: signature,
+      explorer: `https://solscan.io/tx/${signature}`,
+      message: `Bought back ${(Number(tokensReceived) / 1e6).toFixed(2)} ${token.symbol} for ${solSpent} SOL`,
       nextStep: 'Tokens are now in Earn wallet. Use POST /api/rewards/crank to distribute to stakers.',
     });
     
