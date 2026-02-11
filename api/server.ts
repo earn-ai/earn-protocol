@@ -3074,55 +3074,85 @@ app.post('/admin/buyback', async (req, res) => {
     const { PumpSdk, bondingCurvePda, GLOBAL_PDA } = await import('@pump-fun/pump-sdk');
     const pumpSdk = new PumpSdk();
     const BN = (await import('bn.js')).default;
+    const { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction, TOKEN_2022_PROGRAM_ID } = await import('@solana/spl-token');
     
     const mintPubkey = new PublicKey(tokenMint);
     
-    // Get bonding curve
+    // Get bonding curve PDA
     const bcPda = bondingCurvePda(mintPubkey);
     const bondingCurve = Array.isArray(bcPda) ? bcPda[0] : bcPda;
     
-    // Get global and bonding curve info
+    // Get global info
     const globalInfo = await connection.getAccountInfo(GLOBAL_PDA);
     if (!globalInfo) {
       return res.status(500).json({ success: false, error: 'Pump.fun global account not found' });
     }
     const global = pumpSdk.decodeGlobal(globalInfo);
     
+    // Get bonding curve info
     const bcInfo = await connection.getAccountInfo(bondingCurve);
     if (!bcInfo) {
       return res.status(500).json({ success: false, error: 'Bonding curve not found - token may have graduated to Raydium' });
     }
     const bc = pumpSdk.decodeBondingCurve(bcInfo);
     
-    // Calculate tokens to receive
-    const solAmountBN = new BN(buyAmountLamports);
-    const buyResult = pumpSdk.calculateBuyTokensResult(solAmountBN, bc, global);
-    
-    // Build buy transaction
-    const buyTx = await pumpSdk.buy(
-      earnWallet.publicKey,
+    // Get/create ATA for the token
+    const earnAta = getAssociatedTokenAddressSync(
       mintPubkey,
-      solAmountBN,
-      buyResult.tokenAmount,
-      undefined, // slippage handled by SDK
-      earnWallet.publicKey
+      earnWallet.publicKey,
+      false,
+      TOKEN_2022_PROGRAM_ID
     );
+    const ataInfo = await connection.getAccountInfo(earnAta);
     
-    // Add compute budget for Token-2022
-    buyTx.instructions.unshift(
-      ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 }),
-      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 })
-    );
+    // Calculate token amount from SOL using virtual reserves
+    const solLamports = new BN(buyAmountLamports);
+    const tokenAmount = solLamports.mul(bc.virtualTokenReserves).div(bc.virtualSolReserves);
+    
+    // Build buy instructions
+    const buyIxs = await pumpSdk.buyInstructions({
+      global,
+      bondingCurve: bc,
+      bondingCurveAccountInfo: bcInfo,
+      associatedUserAccountInfo: ataInfo,
+      mint: mintPubkey,
+      user: earnWallet.publicKey,
+      amount: tokenAmount,
+      solAmount: solLamports,
+      slippage: 0.15, // 15% slippage for buybacks
+      tokenProgram: TOKEN_2022_PROGRAM_ID,
+    });
+    
+    // Build transaction
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }));
+    tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
+    
+    // Create ATA if needed
+    if (!ataInfo) {
+      tx.add(createAssociatedTokenAccountIdempotentInstruction(
+        earnWallet.publicKey,
+        earnAta,
+        earnWallet.publicKey,
+        mintPubkey,
+        TOKEN_2022_PROGRAM_ID
+      ));
+    }
+    
+    // Add buy instructions
+    for (const ix of buyIxs) {
+      tx.add(ix);
+    }
     
     // Sign and send
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-    buyTx.recentBlockhash = blockhash;
-    buyTx.feePayer = earnWallet.publicKey;
-    buyTx.sign(earnWallet);
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = earnWallet.publicKey;
+    tx.sign(earnWallet);
     
-    const signature = await connection.sendRawTransaction(buyTx.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
+    const signature = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: true,
+      maxRetries: 3,
     });
     
     await connection.confirmTransaction({
@@ -3131,7 +3161,7 @@ app.post('/admin/buyback', async (req, res) => {
       lastValidBlockHeight,
     }, 'confirmed');
     
-    const tokensReceived = buyResult.tokenAmount.toString();
+    const tokensReceived = tokenAmount.toString();
     const solSpent = buyAmountLamports / 1e9;
     
     res.json({
