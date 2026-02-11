@@ -3143,6 +3143,174 @@ app.post('/admin/setup-fee-sharing', async (req, res) => {
   }
 });
 
+// Get token phase (bonding curve vs AMM) and fee info
+app.get('/api/token/:mint/status', async (req, res) => {
+  try {
+    const { mint } = req.params;
+    const mintPubkey = new PublicKey(mint);
+    
+    const { bondingCurvePda, GLOBAL_PDA } = await import('@pump-fun/pump-sdk');
+    const { canonicalPumpPoolPda, coinCreatorVaultAuthorityPda, PUMP_AMM_PROGRAM_ID } = await import('@pump-fun/pump-swap-sdk');
+    const { NATIVE_MINT, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } = await import('@solana/spl-token');
+    
+    // Check bonding curve
+    const bcPda = bondingCurvePda(mintPubkey);
+    const bondingCurve = Array.isArray(bcPda) ? bcPda[0] : bcPda;
+    const bcInfo = await connection.getAccountInfo(bondingCurve);
+    
+    // Check AMM pool
+    const ammPool = canonicalPumpPoolPda(mintPubkey);
+    const ammInfo = await connection.getAccountInfo(ammPool);
+    
+    let phase: 'bonding_curve' | 'amm' | 'unknown' = 'unknown';
+    let ammPoolAddress = null;
+    let claimableFees = 0;
+    
+    if (bcInfo && bcInfo.owner.equals(new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P'))) {
+      phase = 'bonding_curve';
+    } else if (ammInfo) {
+      phase = 'amm';
+      ammPoolAddress = ammPool.toString();
+      
+      // Check AMM creator vault for fees
+      const creatorVaultAuth = coinCreatorVaultAuthorityPda(earnWallet.publicKey);
+      const wsolAta = getAssociatedTokenAddressSync(NATIVE_MINT, creatorVaultAuth, true, TOKEN_PROGRAM_ID);
+      
+      try {
+        const ataInfo = await connection.getAccountInfo(wsolAta);
+        if (ataInfo) {
+          // Parse token account to get balance
+          const balanceData = ataInfo.data.slice(64, 72);
+          claimableFees = Number(Buffer.from(balanceData).readBigUInt64LE()) / 1e9;
+        }
+      } catch (e) {
+        // ATA might not exist
+      }
+    }
+    
+    // Also check old creator vault (from bonding curve era)
+    const { creatorVaultPda } = await import('@pump-fun/pump-sdk');
+    const oldVault = creatorVaultPda(earnWallet.publicKey);
+    const oldVaultAddr = Array.isArray(oldVault) ? oldVault[0] : oldVault;
+    try {
+      const oldVaultInfo = await connection.getAccountInfo(oldVaultAddr);
+      if (oldVaultInfo) {
+        claimableFees += oldVaultInfo.lamports / 1e9;
+      }
+    } catch (e) {}
+    
+    const token = await supabase.getToken(mint);
+    
+    res.json({
+      success: true,
+      mint,
+      symbol: token?.symbol || 'UNKNOWN',
+      phase,
+      ammPoolAddress,
+      claimableFees,
+      claimableFeesLamports: Math.floor(claimableFees * 1e9),
+    });
+    
+  } catch (e: any) {
+    console.error('Token status error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Claim fees from AMM (for graduated tokens)
+app.post('/admin/claim-amm-fees', async (req, res) => {
+  try {
+    const { tokenMint } = req.body;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ success: false, error: 'tokenMint required' });
+    }
+    
+    const mintPubkey = new PublicKey(tokenMint);
+    
+    // Import AMM SDK
+    const { PumpAmmSdk, coinCreatorVaultAuthorityPda, coinCreatorVaultAtaPda, PUMP_AMM_PROGRAM_ID } = await import('@pump-fun/pump-swap-sdk');
+    const { NATIVE_MINT, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } = await import('@solana/spl-token');
+    
+    const pumpAmmSdk = new PumpAmmSdk(connection);
+    
+    // Get vault addresses
+    const coinCreatorVaultAuthority = coinCreatorVaultAuthorityPda(earnWallet.publicKey);
+    const coinCreatorVaultAta = getAssociatedTokenAddressSync(NATIVE_MINT, coinCreatorVaultAuthority, true, TOKEN_PROGRAM_ID);
+    const coinCreatorTokenAccount = getAssociatedTokenAddressSync(NATIVE_MINT, earnWallet.publicKey, false, TOKEN_PROGRAM_ID);
+    
+    // Check vault balance
+    const vaultAtaInfo = await connection.getAccountInfo(coinCreatorVaultAta);
+    if (!vaultAtaInfo) {
+      return res.json({
+        success: true,
+        claimed: 0,
+        message: 'No AMM creator vault found or empty',
+      });
+    }
+    
+    const coinCreatorTokenAccountInfo = await connection.getAccountInfo(coinCreatorTokenAccount);
+    
+    // Build collect fee instructions
+    const collectIxs = await pumpAmmSdk.collectCoinCreatorFee({
+      coinCreator: earnWallet.publicKey,
+      quoteMint: NATIVE_MINT,
+      quoteTokenProgram: TOKEN_PROGRAM_ID,
+      coinCreatorVaultAuthority,
+      coinCreatorVaultAta,
+      coinCreatorTokenAccount,
+      coinCreatorVaultAtaAccountInfo: vaultAtaInfo,
+      coinCreatorTokenAccountInfo,
+    });
+    
+    if (collectIxs.length === 0) {
+      return res.json({
+        success: true,
+        claimed: 0,
+        message: 'No fees to collect',
+      });
+    }
+    
+    const tx = new Transaction();
+    tx.add(ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 }));
+    tx.add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }));
+    for (const ix of collectIxs) {
+      tx.add(ix);
+    }
+    
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = earnWallet.publicKey;
+    tx.sign(earnWallet);
+    
+    const signature = await connection.sendRawTransaction(tx.serialize(), {
+      skipPreflight: true,
+      maxRetries: 3,
+    });
+    
+    await connection.confirmTransaction({
+      signature,
+      blockhash,
+      lastValidBlockHeight,
+    }, 'confirmed');
+    
+    // Check how much was claimed (balance diff)
+    const newBalance = await connection.getBalance(earnWallet.publicKey);
+    
+    res.json({
+      success: true,
+      signature,
+      explorer: `https://solscan.io/tx/${signature}`,
+      message: 'AMM creator fees collected successfully',
+      newWalletBalance: newBalance / 1e9,
+    });
+    
+  } catch (e: any) {
+    console.error('AMM claim fees error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Execute buyback for a token
 app.post('/admin/buyback', async (req, res) => {
   try {
