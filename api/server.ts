@@ -3284,11 +3284,14 @@ app.post('/admin/claim-all-fees', async (req, res) => {
 // Execute buyback for a token
 app.post('/admin/buyback', async (req, res) => {
   try {
-    const { tokenMint, solAmount } = req.body;
+    const { tokenMint, solAmount, slippageBps } = req.body;
     
     if (!tokenMint) {
       return res.status(400).json({ success: false, error: 'tokenMint required' });
     }
+    
+    // Convert slippageBps to decimal (e.g., 5000 = 50% = 0.5)
+    const slippage = slippageBps ? slippageBps / 10000 : 0.15;
     
     // Get token info
     const token = await supabase.getToken(tokenMint);
@@ -3356,7 +3359,7 @@ app.post('/admin/buyback', async (req, res) => {
       user: earnWallet.publicKey,
       amount: tokenAmount,
       solAmount: solLamports,
-      slippage: 0.15, // 15% slippage for buybacks
+      slippage, // from request or default 15%
       tokenProgram: TOKEN_2022_PROGRAM_ID,
     });
     
