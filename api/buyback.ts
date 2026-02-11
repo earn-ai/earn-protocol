@@ -12,7 +12,7 @@ import BN from 'bn.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const RPC_URL = process.env.RPC_URL || 'https://api.devnet.solana.com';
+const RPC_URL = process.env.RPC_URL || 'https://mainnet.helius-rpc.com/?api-key=5629f272-cbdf-475b-ac6c-1c73fccae3f4';
 const EARN_WALLET_PATH = process.env.EARN_WALLET || '/home/node/.config/solana/earn-wallet.json';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const BUYBACK_LOG = path.join(DATA_DIR, 'buybacks.json');
