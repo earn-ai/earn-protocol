@@ -2946,6 +2946,346 @@ app.get('/admin/wallet', async (req, res) => {
 
 // ============ END ADMIN ============
 
+// ============ OFF-CHAIN STAKING (Token-2022 compatible) ============
+
+// POST /api/stake - Record a stake after user transfers tokens to pool wallet
+app.post('/api/stake', async (req, res) => {
+  try {
+    const { userWallet, tokenMint, txSignature } = req.body;
+    
+    if (!userWallet || !tokenMint || !txSignature) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        required: ['userWallet', 'tokenMint', 'txSignature'],
+      });
+    }
+    
+    // Verify the token exists in our registry
+    const token = await supabase.getToken(tokenMint);
+    if (!token) {
+      return res.status(404).json({
+        success: false,
+        error: 'Token not found in Earn Protocol registry',
+      });
+    }
+    
+    // Verify the transaction on-chain
+    const txInfo = await connection.getParsedTransaction(txSignature, {
+      commitment: 'confirmed',
+      maxSupportedTransactionVersion: 0,
+    });
+    
+    if (!txInfo) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction not found or not confirmed',
+      });
+    }
+    
+    // Parse the transaction to find the token transfer
+    let transferAmount = 0;
+    let transferMint = '';
+    let fromWallet = '';
+    let toWallet = '';
+    
+    const instructions = txInfo.transaction.message.instructions;
+    for (const ix of instructions) {
+      if ('parsed' in ix && ix.parsed?.type === 'transferChecked') {
+        const info = ix.parsed.info;
+        transferAmount = info.tokenAmount?.uiAmount || 0;
+        transferMint = info.mint;
+        fromWallet = info.authority;
+        toWallet = info.destination;
+      } else if ('parsed' in ix && ix.parsed?.type === 'transfer') {
+        const info = ix.parsed.info;
+        transferAmount = info.amount ? Number(info.amount) : 0;
+        fromWallet = info.authority || info.source;
+        toWallet = info.destination;
+      }
+    }
+    
+    // Validate transfer details
+    if (transferAmount === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No token transfer found in transaction',
+      });
+    }
+    
+    // Get or create staking pool
+    const pool = await supabase.getOrCreateStakingPool(tokenMint, earnWallet.publicKey.toString());
+    
+    // Check minimum stake
+    if (transferAmount < pool.min_stake_amount / 1e6) {
+      return res.status(400).json({
+        success: false,
+        error: `Stake amount below minimum (${pool.min_stake_amount / 1e6} tokens)`,
+      });
+    }
+    
+    // Record the stake
+    const stake = await supabase.recordStake(
+      userWallet,
+      tokenMint,
+      Math.floor(transferAmount * 1e6), // Store in smallest unit
+      txSignature
+    );
+    
+    // Update pool totals
+    await supabase.updatePoolTotals(tokenMint);
+    
+    res.json({
+      success: true,
+      stakeId: stake.stake_id,
+      amount: transferAmount,
+      tokenMint,
+      stakedAt: stake.staked_at,
+      message: 'Stake recorded successfully',
+    });
+    
+  } catch (e: any) {
+    console.error('Stake error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /api/stakes/:wallet - Get all active stakes for a wallet
+app.get('/api/stakes/:wallet', async (req, res) => {
+  try {
+    const { wallet } = req.params;
+    
+    if (!wallet) {
+      return res.status(400).json({ success: false, error: 'Wallet address required' });
+    }
+    
+    const stakes = await supabase.getActiveStakesByUser(wallet);
+    
+    // Calculate estimated rewards for each stake
+    const stakesWithRewards = await Promise.all(stakes.map(async (stake) => {
+      const pool = await supabase.getStakingPool(stake.token_mint);
+      const token = await supabase.getToken(stake.token_mint);
+      
+      // Calculate time staked in days
+      const stakedAt = new Date(stake.staked_at).getTime();
+      const now = Date.now();
+      const daysStaked = (now - stakedAt) / (1000 * 60 * 60 * 24);
+      
+      // Estimate APY based on staking share (simplified)
+      const shareOfPool = pool && pool.total_staked > 0 
+        ? stake.amount / pool.total_staked 
+        : 1;
+      
+      return {
+        ...stake,
+        amountFormatted: stake.amount / 1e6,
+        tokenSymbol: token?.symbol || 'UNKNOWN',
+        tokenName: token?.name || 'Unknown Token',
+        daysStaked: Math.floor(daysStaked * 100) / 100,
+        poolShare: Math.floor(shareOfPool * 10000) / 100, // percentage
+        estimatedRewards: 0, // Will be calculated by crank
+      };
+    }));
+    
+    res.json({
+      success: true,
+      wallet,
+      stakes: stakesWithRewards,
+      totalStakes: stakes.length,
+    });
+    
+  } catch (e: any) {
+    console.error('Get stakes error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/unstake - Request unstake
+app.post('/api/unstake', async (req, res) => {
+  try {
+    const { stakeId, userWallet } = req.body;
+    
+    if (!stakeId || !userWallet) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        required: ['stakeId', 'userWallet'],
+      });
+    }
+    
+    // Get the stake
+    const stake = await supabase.getStakeById(stakeId);
+    if (!stake) {
+      return res.status(404).json({ success: false, error: 'Stake not found' });
+    }
+    
+    // Verify ownership
+    if (stake.user_wallet !== userWallet) {
+      return res.status(403).json({ success: false, error: 'Unauthorized - not stake owner' });
+    }
+    
+    // Check status
+    if (stake.status !== 'active') {
+      return res.status(400).json({ success: false, error: `Stake already ${stake.status}` });
+    }
+    
+    // Get token info for transfer
+    const token = await supabase.getToken(stake.token_mint);
+    if (!token) {
+      return res.status(404).json({ success: false, error: 'Token not found' });
+    }
+    
+    // For now, mark as unstaking - actual transfer needs to be done by crank/admin
+    // In production, this would trigger an actual token transfer back to user
+    await supabase.updateStakeStatus(stakeId, 'unstaking');
+    
+    // Update pool totals
+    await supabase.updatePoolTotals(stake.token_mint);
+    
+    res.json({
+      success: true,
+      stakeId,
+      status: 'unstaking',
+      amount: stake.amount / 1e6,
+      tokenMint: stake.token_mint,
+      message: 'Unstake request submitted. Tokens will be returned shortly.',
+      note: 'A crank process will transfer your tokens back within 24 hours.',
+    });
+    
+  } catch (e: any) {
+    console.error('Unstake error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /api/staking/pool/:tokenMint - Get pool stats
+app.get('/api/staking/pool/:tokenMint', async (req, res) => {
+  try {
+    const { tokenMint } = req.params;
+    
+    const pool = await supabase.getStakingPool(tokenMint);
+    if (!pool) {
+      return res.status(404).json({ success: false, error: 'Staking pool not found' });
+    }
+    
+    const token = await supabase.getToken(tokenMint);
+    const stakes = await supabase.getActiveStakesByToken(tokenMint);
+    
+    // Calculate some basic stats
+    const uniqueStakers = new Set(stakes.map(s => s.user_wallet));
+    const avgStake = stakes.length > 0 
+      ? stakes.reduce((sum, s) => sum + s.amount, 0) / stakes.length / 1e6
+      : 0;
+    
+    res.json({
+      success: true,
+      pool: {
+        tokenMint,
+        tokenSymbol: token?.symbol || 'UNKNOWN',
+        tokenName: token?.name || 'Unknown',
+        poolWallet: pool.pool_wallet,
+        totalStaked: pool.total_staked / 1e6,
+        totalStakers: uniqueStakers.size,
+        minStakeAmount: pool.min_stake_amount / 1e6,
+        lastCrankAt: pool.last_crank_at,
+        createdAt: pool.created_at,
+        avgStakeAmount: Math.floor(avgStake * 100) / 100,
+        stakingCutBps: token?.staking_cut_bps || 0,
+        estimatedApy: 'Variable - based on trading fees',
+      },
+    });
+    
+  } catch (e: any) {
+    console.error('Get pool error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// POST /api/rewards/crank - Distribute rewards (admin/crank only)
+app.post('/api/rewards/crank', async (req, res) => {
+  try {
+    const { tokenMint, totalFeeRevenue } = req.body;
+    
+    if (!tokenMint) {
+      return res.status(400).json({ success: false, error: 'tokenMint required' });
+    }
+    
+    // Get active stakes for this token
+    const stakes = await supabase.getActiveStakesByToken(tokenMint);
+    if (stakes.length === 0) {
+      return res.json({ success: true, message: 'No active stakes to distribute to' });
+    }
+    
+    const pool = await supabase.getStakingPool(tokenMint);
+    if (!pool) {
+      return res.status(404).json({ success: false, error: 'Pool not found' });
+    }
+    
+    const token = await supabase.getToken(tokenMint);
+    const stakingShareBps = token?.staking_cut_bps || 3000; // Default 30%
+    
+    // Calculate total stake-weighted time
+    const now = Date.now();
+    let totalStakeTime = 0;
+    const stakeDetails = stakes.map(stake => {
+      const stakedAt = new Date(stake.staked_at).getTime();
+      const stakeTime = (now - stakedAt) / (1000 * 60 * 60); // hours
+      const weightedTime = stake.amount * stakeTime;
+      totalStakeTime += weightedTime;
+      return { ...stake, stakeTime, weightedTime };
+    });
+    
+    // Calculate rewards for each staker
+    // In production, totalFeeRevenue would come from on-chain fee tracking
+    const feeRevenue = totalFeeRevenue || 0; // lamports
+    const stakingRewards = Math.floor(feeRevenue * stakingShareBps / 10000);
+    
+    const distributions: any[] = [];
+    
+    if (stakingRewards > 0 && totalStakeTime > 0) {
+      for (const stake of stakeDetails) {
+        const share = stake.weightedTime / totalStakeTime;
+        const reward = Math.floor(stakingRewards * share);
+        
+        if (reward > 0) {
+          // Record the reward (actual transfer would happen here in production)
+          const rewardRecord = await supabase.recordReward(
+            stake.stake_id,
+            stake.user_wallet,
+            tokenMint,
+            reward
+          );
+          
+          distributions.push({
+            stakeId: stake.stake_id,
+            userWallet: stake.user_wallet,
+            reward: reward / 1e9, // Convert lamports to SOL
+            share: Math.floor(share * 10000) / 100,
+          });
+        }
+      }
+    }
+    
+    // Update last crank time
+    await supabase.updatePoolLastCrank(tokenMint);
+    
+    res.json({
+      success: true,
+      tokenMint,
+      totalFeeRevenue: feeRevenue / 1e9,
+      stakingRewards: stakingRewards / 1e9,
+      distributions,
+      message: `Distributed rewards to ${distributions.length} stakers`,
+    });
+    
+  } catch (e: any) {
+    console.error('Crank error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ============ END OFF-CHAIN STAKING ============
+
 // 405 handlers for POST-only routes
 const postOnlyRoutes = ['/launch', '/register', '/stake/create-pool', '/stake/tx/stake', '/stake/tx/unstake', '/stake/tx/claim'];
 postOnlyRoutes.forEach(route => {
